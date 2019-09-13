@@ -1,0 +1,7 @@
+*.jpg
+*.out
+x.*
+
+results/*
+scripts/*.pdf
+scripts/*.png
