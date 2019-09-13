@@ -5,6 +5,8 @@
 #include "alloc.h"
 #include "../../key/key.h"
 #include "btree.h"
+#include "validate.h"
+#include "print.h"
 
 #if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM)
 #	include <pthread.h> //> pthread_spinlock_t
@@ -469,126 +471,6 @@ static int btree_update(btree_t *btree, map_key_t key, void *val)
 		                       node_stack_top) + 2;
 }
 
-static void btree_print_rec(btree_node_t *root, int level)
-{
-	int i;
-
-	printf("[LVL %4d]: ", level);
-	fflush(stdout);
-	btree_node_print(root);
-
-	if (!root || root->leaf) return;
-
-	for (i=0; i < root->no_keys; i++)
-		btree_print_rec(root->children[i], level + 1);
-	if (root->no_keys > 0)
-		btree_print_rec(root->children[root->no_keys], level + 1);
-}
-
-static void btree_print(btree_t *btree)
-{
-	if (!btree) {
-		printf("Empty tree\n");
-		return;
-	}
-	btree_print_rec(btree->root, 0);
-}
-
-int bst_violations, total_nodes, total_keys, leaf_keys;
-int null_children_violations;
-int not_full_nodes;
-int leaves_level;
-int leaves_at_same_level;
-static void btree_node_validate(btree_node_t *n, map_key_t min, map_key_t max, btree_t *btree)
-{
-	int i;
-	map_key_t cur_min;
-
-	KEY_COPY(cur_min, n->keys[0]);
-
-	if (n != btree->root && n->no_keys < BTREE_ORDER)
-		not_full_nodes++;
-
-	for (i=1; i < n->no_keys; i++)
-		if (KEY_CMP(n->keys[i], cur_min) <= 0) {
-			bst_violations++;
-		}
-
-	if (KEY_CMP(n->keys[0], min) < 0 || KEY_CMP(n->keys[n->no_keys-1], max) > 0) {
-		bst_violations++;
-	}
-
-	if (!n->leaf)
-		for (i=0; i <= n->no_keys; i++)
-			if (!n->children[i])
-				null_children_violations++;
-}
-
-static void btree_validate_rec(btree_node_t *root, map_key_t min, map_key_t max,
-                               btree_t *btree, int level)
-{
-	int i;
-
-	if (!root) return;
-
-	total_nodes++;
-	total_keys += root->no_keys;
-
-	btree_node_validate(root, min, max, btree);
-	
-	if (root->leaf) {
-		if (leaves_level == -1)
-			leaves_level = level;
-		else if (level != leaves_level)
-				leaves_at_same_level = 0;
-		leaf_keys += root->no_keys;
-		return;
-	}
-
-	for (i=0; i <= root->no_keys; i++)
-		btree_validate_rec(root->children[i],
-		                   i == 0 ? min : root->keys[i-1],
-		                   i == root->no_keys ? max : root->keys[i] - 1,
-		                   btree, level+1);
-}
-
-static int btree_validate_helper(btree_t *btree)
-{
-	int check_bst = 0, check_btree_properties = 0;
-	bst_violations = 0;
-	total_nodes = 0;
-	total_keys = leaf_keys = 0;
-	null_children_violations = 0;
-	not_full_nodes = 0;
-	leaves_level = -1;
-	leaves_at_same_level = 1;
-
-	btree_validate_rec(btree->root, MIN_KEY, MAX_KEY, btree, 0);
-
-	check_bst = (bst_violations == 0);
-	check_btree_properties = (null_children_violations == 0) &&
-	                         (not_full_nodes == 0) &&
-	                         (leaves_at_same_level == 1);
-
-	printf("Validation:\n");
-	printf("=======================\n");
-	printf("  BST Violation: %s\n",
-	       check_bst ? "No [OK]" : "Yes [ERROR]");
-	printf("  BTREE Violation: %s\n",
-	       check_btree_properties ? "No [OK]" : "Yes [ERROR]");
-	printf("  |-- NULL Children Violation: %s\n",
-	       (null_children_violations == 0) ? "No [OK]" : "Yes [ERROR]");
-	printf("  |-- Not-full Nodes: %s\n",
-	       (not_full_nodes == 0) ? "No [OK]" : "Yes [ERROR]");
-	printf("  |-- Leaves at same level: %s [ Level %d ]\n",
-	       (leaves_at_same_level == 1) ? "Yes [OK]" : "No [ERROR]", leaves_level);
-	printf("  Tree size: %8d\n", total_nodes);
-	printf("  Number of keys: %8d total / %8d in leaves\n", total_keys, leaf_keys);
-	printf("\n");
-
-	return check_bst && check_btree_properties;
-}
-
 /******************************************************************************/
 /* Red-Black tree interface implementation                                    */
 /******************************************************************************/
@@ -601,7 +483,6 @@ void *map_new()
 void *map_tdata_new(int tid)
 {
 	nalloc = nalloc_thread_init(tid, sizeof(btree_node_t));
-
 #	if defined(SYNC_CG_HTM)
 	return tx_thread_data_new(tid);
 #	else
@@ -629,17 +510,17 @@ int map_lookup(void *map, void *thread_data, int key)
 	int ret = 0;
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_lock(&((btree_t *)map)->btree_lock);
+	pthread_spin_lock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->btree_lock);
+	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->lock);
 #	endif
 
 	ret = btree_lookup(map, key);
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_unlock(&((btree_t *)map)->btree_lock);
+	pthread_spin_unlock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_end(thread_data, &((btree_t *)map)->btree_lock);
+	tx_end(thread_data, &((btree_t *)map)->lock);
 #	endif
 
 	return ret; 
@@ -650,17 +531,17 @@ int map_rquery(void *map, void *thread_data, map_key_t key1, map_key_t key2)
 	int ret = 0, nkeys;
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_lock(&((btree_t *)map)->btree_lock);
+	pthread_spin_lock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->btree_lock);
+	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->lock);
 #	endif
 
 	ret = btree_rquery(map, key1, key2, &nkeys);
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_unlock(&((btree_t *)map)->btree_lock);
+	pthread_spin_unlock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_end(thread_data, &((btree_t *)map)->btree_lock);
+	tx_end(thread_data, &((btree_t *)map)->lock);
 #	endif
 
 	return ret; 
@@ -671,17 +552,17 @@ int map_insert(void *map, void *thread_data, int key, void *value)
 	int ret = 0;
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_lock(&((btree_t *)map)->btree_lock);
+	pthread_spin_lock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->btree_lock);
+	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->lock);
 #	endif
 
 	ret = btree_insert(map, key, value);
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_unlock(&((btree_t *)map)->btree_lock);
+	pthread_spin_unlock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_end(thread_data, &((btree_t *)map)->btree_lock);
+	tx_end(thread_data, &((btree_t *)map)->lock);
 #	endif
 	return ret;
 }
@@ -691,17 +572,17 @@ int map_delete(void *map, void *thread_data, int key)
 	int ret = 0;
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_lock(&((btree_t *)map)->btree_lock);
+	pthread_spin_lock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->btree_lock);
+	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->lock);
 #	endif
 
 	ret = btree_delete(map, key);
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_unlock(&((btree_t *)map)->btree_lock);
+	pthread_spin_unlock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_end(thread_data, &((btree_t *)map)->btree_lock);
+	tx_end(thread_data, &((btree_t *)map)->lock);
 #	endif
 
 	return ret;
@@ -712,17 +593,17 @@ int map_update(void *map, void *thread_data, int key, void *value)
 	int ret = 0;
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_lock(&((btree_t *)map)->btree_lock);
+	pthread_spin_lock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->btree_lock);
+	tx_start(TX_NUM_RETRIES, thread_data, &((btree_t *)map)->lock);
 #	endif
 
 	ret = btree_update(map, key, value);
 
 #	if defined(SYNC_CG_SPINLOCK)
-	pthread_spin_unlock(&((btree_t *)map)->btree_lock);
+	pthread_spin_unlock(&((btree_t *)map)->lock);
 #	elif defined(SYNC_CG_HTM)
-	tx_end(thread_data, &((btree_t *)map)->btree_lock);
+	tx_end(thread_data, &((btree_t *)map)->lock);
 #	endif
 	return ret;
 }

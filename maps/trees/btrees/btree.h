@@ -2,14 +2,17 @@
 #define _BTREE_H_
 
 #include <stdio.h>
+#include <string.h>
+#if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM) || defined(SYNC_RCU_HTM)
+#include <pthread.h> //> pthread_spinlock_t
+#endif
 #include "../../key/key.h"
 #include "../../map.h"
 #include "alloc.h"
-#if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM)
-#	include <pthread.h> //> pthread_spinlock_t
-#endif
 
+#ifndef BTREE_ORDER
 #define BTREE_ORDER 8
+#endif
 
 typedef struct btree_node_s {
 	int leaf;
@@ -22,8 +25,8 @@ typedef struct btree_node_s {
 typedef struct {
 	btree_node_t *root;
 
-#	if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM)
-	pthread_spinlock_t btree_lock;
+#	if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM) || defined(SYNC_RCU_HTM)
+	pthread_spinlock_t lock;
 #	endif
 } btree_t;
 
@@ -37,6 +40,13 @@ static btree_node_t *btree_node_new(char leaf)
 	btree_node_t *ret = nalloc_alloc_node(nalloc);
 	ret->no_keys = 0;
 	ret->leaf = leaf;
+	return ret;
+}
+
+static btree_node_t *btree_node_new_copy(btree_node_t *n)
+{
+	btree_node_t *ret = btree_node_new(0);
+	memcpy(ret, n, sizeof(*n));
 	return ret;
 }
 
@@ -100,8 +110,8 @@ static btree_t *btree_new()
 	XMALLOC(ret, 1);
 	ret->root = NULL;
 
-#	if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM)
-	pthread_spin_init(&ret->btree_lock, PTHREAD_PROCESS_SHARED);
+#	if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM) || defined(SYNC_RCU_HTM)
+	pthread_spin_init(&ret->lock, PTHREAD_PROCESS_SHARED);
 #	endif
 
 	return ret;
