@@ -9,13 +9,14 @@
 #include "ht.h"
 #include "../../map.h"
 #include "../../key/key.h"
+#include "htm/htm.h"
 #define SYNC_RCU_HTM
 #include "btree.h"
 #include "validate.h"
 #include "print.h"
 
 /******************************************************************************/
-//> Transaction begin/end and data.
+//> Per thread data
 /******************************************************************************/
 typedef struct {
 	int tid;
@@ -52,35 +53,6 @@ static inline void tdata_add(tdata_t *d1, tdata_t *d2, tdata_t *dst)
 	dst->lacqs = d1->lacqs + d2->lacqs;
 }
 
-/* TM Interface. */
-#if !defined(TX_NUM_RETRIES)
-#	define TX_NUM_RETRIES 20
-#endif
-
-#ifdef __POWERPC64__
-#	include <htmintrin.h>
-	typedef int tm_begin_ret_t;
-#	define LOCK_FREE 0
-#	define TM_BEGIN_SUCCESS 1
-#	define ABORT_VALIDATION_FAILURE 0xee
-#	define ABORT_GL_TAKEN           0xff
-#	define TX_ABORT(code) __builtin_tabort(code)
-#	define TX_BEGIN(code) __builtin_tbegin(0)
-#	define TX_END(code)   __builtin_tend(0)
-#else
-#	include "rtm.h"
-	typedef unsigned tm_begin_ret_t;
-#	define LOCK_FREE 1
-#	define TM_BEGIN_SUCCESS _XBEGIN_STARTED
-#	define ABORT_VALIDATION_FAILURE 0xee
-#	define ABORT_GL_TAKEN           0xff
-#	define ABORT_IS_CONFLICT(status) ((status) & _XABORT_CONFLICT)
-#	define ABORT_IS_EXPLICIT(status) ((status) & _XABORT_EXPLICIT)
-#	define ABORT_CODE(status) _XABORT_CODE(status)
-#	define TX_ABORT(code) _xabort(code)
-#	define TX_BEGIN(code) _xbegin()
-#	define TX_END(code)   _xend()
-#endif
 /******************************************************************************/
 /******************************************************************************/
 /******************************************************************************/

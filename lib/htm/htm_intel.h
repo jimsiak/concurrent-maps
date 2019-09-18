@@ -1,5 +1,5 @@
-#ifndef RMT_LE_H
-#define RMT_LE_H
+#ifndef _HTM_INTEL_H_
+#define _HTM_INTEL_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -150,4 +150,4 @@ static inline int tx_end(void *thread_data, pthread_spinlock_t *fallback_lock)
 	}
 }
 
-#endif /* RMT_LE_H */
+#endif /* _HTM_INTEL_H_ */

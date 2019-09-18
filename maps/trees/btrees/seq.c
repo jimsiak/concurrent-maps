@@ -13,10 +13,7 @@
 #endif
 
 #if defined(SYNC_CG_HTM)
-#	include "htm.h"
-#	if !defined(TX_NUM_RETRIES)
-#		define TX_NUM_RETRIES 20
-#	endif
+#	include "htm/htm.h"
 #endif
 
 static int btree_traverse(btree_t *btree, map_key_t key,
