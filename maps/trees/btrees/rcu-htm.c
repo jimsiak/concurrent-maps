@@ -101,6 +101,11 @@ int btree_lookup(btree_t *btree, map_key_t key)
 	return (KEY_CMP(n->keys[index], key) == 0);
 }
 
+int btree_rquery(void *map, map_key_t key1, map_key_t key2)
+{
+	return 0;
+}
+
 void btree_traverse_stack(btree_t *btree, map_key_t key,
                           btree_node_t **node_stack, int *node_stack_indexes,
                           int *node_stack_top)
@@ -121,6 +126,35 @@ void btree_traverse_stack(btree_t *btree, map_key_t key,
 	index = btree_node_search(n, key);
 	node_stack[++(*node_stack_top)] = n;
 	node_stack_indexes[*node_stack_top] = index;
+}
+
+btree_node_t *find_left_sibling(btree_node_t **node_stack,
+                                int *node_stack_indexes,
+                                int stack_top, tdata_t *tdata)
+{
+	btree_node_t *cur, *next;
+	int cur_index;
+
+	if (stack_top == 0) return NULL;
+	
+	stack_top--;
+	while (stack_top >= 0 && node_stack_indexes[stack_top] == 0)
+		stack_top--;
+
+	if (stack_top < 0) return NULL;
+
+	//> Start from the first left sibling and walk down the tree
+	cur = node_stack[stack_top];
+	cur_index = node_stack_indexes[stack_top];
+	next = cur->children[cur_index - 1];
+	ht_insert(tdata->ht, &cur->children[cur_index - 1], next);
+	cur = next;
+	while (!cur->leaf) {
+		next = cur->children[cur->no_keys];
+		ht_insert(tdata->ht, &cur->children[cur->no_keys], next);
+		cur = next;
+	}
+	return cur;
 }
 
 /**
@@ -166,6 +200,11 @@ btree_node_t *btree_node_split(btree_node_t *n, map_key_t key, void *ptr, int in
 		n->no_keys--;
 	}
 
+	if (n->leaf) {
+		rnode->sibling = n->sibling;
+		n->sibling = rnode;
+	}
+
 	return rnode;
 }
 
@@ -176,7 +215,9 @@ btree_node_t *btree_insert_with_copy(map_key_t key, void *val,
                              btree_node_t **node_stack, int *node_stack_indexes,
                              int stack_top,
                              btree_node_t **tree_cp_root,
-                             int *connection_point_stack_index, tdata_t *tdata)
+                             int *connection_point_stack_index,
+                             btree_node_t **to_modify_sibling, 
+                             btree_node_t **new_sibling, tdata_t *tdata)
 {
 	btree_node_t *cur = NULL, *cur_cp = NULL, *cur_cp_prev;
 	btree_node_t *conn_point;
@@ -202,6 +243,14 @@ btree_node_t *btree_insert_with_copy(map_key_t key, void *val,
 		cur_cp = btree_node_new_copy(cur);
 		for (i=0; i <= cur_cp->no_keys; i++)
 			ht_insert(tdata->ht, &cur->children[i], cur_cp->children[i]);
+		ht_insert(tdata->ht, &cur->sibling, cur_cp->sibling);
+
+		//> If leaf, keep the new sibling to be installed later
+		if (cur_cp->leaf) {
+			*to_modify_sibling = find_left_sibling(node_stack, node_stack_indexes,
+			                                       stack_top, tdata);
+			*new_sibling = cur_cp;
+		}
 
 		//> Connect copied node with the rest of the copied tree.
 		if (cur_cp_prev) cur_cp->children[index] = cur_cp_prev;
@@ -229,6 +278,7 @@ int btree_insert(btree_t *btree, map_key_t key, void *val, tdata_t *tdata)
 	tm_begin_ret_t status;
 	btree_node_t *node_stack[20];
 	btree_node_t *connection_point, *tree_cp_root;
+	btree_node_t *to_modify_sibling, *new_sibling;
 	int node_stack_indexes[20], stack_top, index;
 	int retries = -1;
 	int connection_point_stack_index;
@@ -236,6 +286,7 @@ int btree_insert(btree_t *btree, map_key_t key, void *val, tdata_t *tdata)
 try_from_scratch:
 
 	ht_reset(tdata->ht);
+	to_modify_sibling = new_sibling = NULL;
 
 	if (++retries >= TX_NUM_RETRIES) {
 		tdata->lacqs++;
@@ -249,13 +300,15 @@ try_from_scratch:
 		connection_point = btree_insert_with_copy(key, val, 
 		                                  node_stack, node_stack_indexes, stack_top,
 		                                  &tree_cp_root,
-		                                  &connection_point_stack_index, tdata);
+		                                  &connection_point_stack_index,
+		                                  &to_modify_sibling, &new_sibling, tdata);
 		if (connection_point == NULL) {
 			btree->root = tree_cp_root;
 		} else {
 			index = node_stack_indexes[connection_point_stack_index];
 			connection_point->children[index] = tree_cp_root;
 		}
+		if (to_modify_sibling != NULL) to_modify_sibling->sibling = new_sibling;
 		pthread_spin_unlock(&btree->lock);
 		return 1;
 	}
@@ -269,7 +322,8 @@ try_from_scratch:
 	connection_point = btree_insert_with_copy(key, val, 
 	                                  node_stack, node_stack_indexes, stack_top,
 	                                  &tree_cp_root,
-	                                  &connection_point_stack_index, tdata);
+	                                  &connection_point_stack_index,
+	                                  &to_modify_sibling, &new_sibling, tdata);
 
 	int validation_retries = -1;
 validate_and_connect_copy:
@@ -313,6 +367,7 @@ validate_and_connect_copy:
 			index = node_stack_indexes[connection_point_stack_index];
 			connection_point->children[index] = tree_cp_root;
 		}
+		if (to_modify_sibling != NULL) to_modify_sibling->sibling = new_sibling;
 		TX_END(0);
 	} else {
 		tdata->tx_aborts++;
@@ -348,6 +403,7 @@ btree_node_t *btree_merge_with_copy(btree_node_t *c, btree_node_t *p, int pindex
 		sibling_cp = btree_node_new_copy(sibling);
 		for (i=0; i <= sibling_cp->no_keys; i++)
 			ht_insert(tdata->ht, &sibling->children[i], sibling_cp->children[i]);
+		ht_insert(tdata->ht, &sibling->sibling, sibling_cp->sibling);
 
 		sibling_index = sibling_cp->no_keys;
 
@@ -364,6 +420,7 @@ btree_node_t *btree_merge_with_copy(btree_node_t *c, btree_node_t *p, int pindex
 
 		sibling_cp->no_keys = sibling_index;
 		*merged_with_left_sibling = 1;
+		sibling_cp->sibling = c->sibling;
 		return sibling_cp;
 	}
 
@@ -374,6 +431,7 @@ btree_node_t *btree_merge_with_copy(btree_node_t *c, btree_node_t *p, int pindex
 		ht_insert(tdata->ht, &p->children[pindex+1], sibling);
 		for (i=0; i <= sibling_cp->no_keys; i++)
 			ht_insert(tdata->ht, &sibling->children[i], sibling_cp->children[i]);
+		ht_insert(tdata->ht, &sibling->sibling, sibling_cp->sibling);
 
 		sibling_index = c->no_keys;
 
@@ -390,6 +448,7 @@ btree_node_t *btree_merge_with_copy(btree_node_t *c, btree_node_t *p, int pindex
 
 		c->no_keys = sibling_index;
 		*merged_with_left_sibling = 0;
+		c->sibling = sibling_cp->sibling;
 		return c;
 	}
 
@@ -407,10 +466,13 @@ btree_node_t *btree_merge_with_copy(btree_node_t *c, btree_node_t *p, int pindex
 btree_node_t *btree_borrow_keys_with_copies(btree_node_t *c, btree_node_t *p, int pindex,
                                             tdata_t *tdata,
                                             btree_node_t **sibling_left,
-                                            btree_node_t **sibling_right)
+                                            btree_node_t **sibling_right,
+                                            int *borrowed_from_left_sibling)
 {
 	int i;
 	btree_node_t *sibling, *sibling_cp, *parent_cp;
+
+	*borrowed_from_left_sibling = 0;
 
 	//> Left sibling first.
 	if (pindex > 0) {
@@ -424,6 +486,8 @@ btree_node_t *btree_borrow_keys_with_copies(btree_node_t *c, btree_node_t *p, in
 				ht_insert(tdata->ht, &sibling->children[i], sibling_cp->children[i]);
 			for (i=0; i <= parent_cp->no_keys; i++)
 				ht_insert(tdata->ht, &p->children[i], parent_cp->children[i]);
+			ht_insert(tdata->ht, &sibling->sibling, sibling_cp->sibling);
+			ht_insert(tdata->ht, &p->sibling, parent_cp->sibling);
 
 			parent_cp->children[pindex - 1] = sibling_cp;
 			parent_cp->children[pindex] = c;
@@ -441,6 +505,8 @@ btree_node_t *btree_borrow_keys_with_copies(btree_node_t *c, btree_node_t *p, in
 			}
 			sibling_cp->no_keys--;
 			c->no_keys++;
+			sibling_cp->sibling = c;
+			*borrowed_from_left_sibling = 1;
 			return parent_cp;
 		}
 	}
@@ -457,6 +523,8 @@ btree_node_t *btree_borrow_keys_with_copies(btree_node_t *c, btree_node_t *p, in
 				ht_insert(tdata->ht, &sibling->children[i], sibling_cp->children[i]);
 			for (i=0; i <= parent_cp->no_keys; i++)
 				ht_insert(tdata->ht, &p->children[i], parent_cp->children[i]);
+			ht_insert(tdata->ht, &sibling->sibling, sibling_cp->sibling);
+			ht_insert(tdata->ht, &p->sibling, parent_cp->sibling);
 
 			parent_cp->children[pindex] = c;
 			parent_cp->children[pindex+1] = sibling_cp;
@@ -476,6 +544,7 @@ btree_node_t *btree_borrow_keys_with_copies(btree_node_t *c, btree_node_t *p, in
 				sibling_cp->children[i] = sibling_cp->children[i+1];
 			sibling_cp->no_keys--;
 			c->no_keys++;
+			c->sibling = sibling_cp;
 			return parent_cp;
 		}
 	}
@@ -488,14 +557,16 @@ btree_node_t *btree_delete_with_copy(map_key_t key,
                              btree_node_t **node_stack, int *node_stack_indexes,
                              int stack_top,
                              btree_node_t **tree_cp_root,
-                             int *connection_point_stack_index, tdata_t *tdata)
+                             int *connection_point_stack_index,
+                             btree_node_t **to_modify_sibling,
+                             btree_node_t **new_sibling, tdata_t *tdata)
 {
 	btree_node_t *parent;
-	int parent_index;
 	btree_node_t *cur = NULL, *cur_cp = NULL, *cur_cp_prev;
 	btree_node_t *conn_point, *new_parent;
 	int index, i;
-	int merged_with_left_sibling = 0;
+	int parent_index;
+	int merged_with_left_sibling = 0, borrowed_from_left_sibling = 0;
 
 	*tree_cp_root = NULL;
 
@@ -512,6 +583,14 @@ btree_node_t *btree_delete_with_copy(map_key_t key,
 		cur_cp = btree_node_new_copy(cur);
 		for (i=0; i <= cur_cp->no_keys; i++)
 			ht_insert(tdata->ht, &cur->children[i], cur_cp->children[i]);
+		ht_insert(tdata->ht, &cur->sibling, cur_cp->sibling);
+
+		//> Get the sibling pointer to be modified
+		if (cur_cp->leaf) {
+			*to_modify_sibling = find_left_sibling(node_stack, node_stack_indexes,
+			                                       stack_top, tdata);
+			*new_sibling = cur_cp;
+		}
 
 		//> Connect copied node with the rest of the copied tree.
 		if (*tree_cp_root) cur_cp->children[index] = *tree_cp_root;
@@ -531,7 +610,17 @@ btree_node_t *btree_delete_with_copy(map_key_t key,
 		parent = node_stack[stack_top-1];
 		parent_index = node_stack_indexes[stack_top-1];
 		new_parent = btree_borrow_keys_with_copies(cur_cp, parent, parent_index, tdata,
-		                                           &sibling_left, &sibling_right);
+		                                           &sibling_left, &sibling_right,
+		                                           &borrowed_from_left_sibling);
+
+		//> Update the sibling pointer to be modified
+		if (borrowed_from_left_sibling && cur_cp->leaf) {
+			node_stack_indexes[stack_top-1]--; // We want left sibling's sibling :-)
+			*to_modify_sibling = find_left_sibling(node_stack, node_stack_indexes,
+			                                       stack_top, tdata);
+			node_stack_indexes[stack_top-1]++; // Fix it in case it is used elsewhere
+			*new_sibling = new_parent->children[node_stack_indexes[stack_top-1]-1];
+		}
 		if (new_parent != NULL) {
 			*tree_cp_root = new_parent;
 			stack_top--;
@@ -542,6 +631,13 @@ btree_node_t *btree_delete_with_copy(map_key_t key,
 		*tree_cp_root = btree_merge_with_copy(cur_cp, parent, parent_index,
 		                                      &merged_with_left_sibling, tdata,
 		                                      sibling_left, sibling_right);
+		if (merged_with_left_sibling && cur_cp->leaf) {
+			node_stack_indexes[stack_top-1]--; // We want left sibling's sibling :-)
+			*to_modify_sibling = find_left_sibling(node_stack, node_stack_indexes,
+			                                       stack_top, tdata);
+			node_stack_indexes[stack_top-1]++; // Fix it in case it is used elsewhere
+			*new_sibling = *tree_cp_root;
+		}
 
 		//> Move one level up
 		stack_top--;
@@ -557,12 +653,14 @@ int btree_delete(btree_t *btree, map_key_t key, tdata_t *tdata)
 	tm_begin_ret_t status;
 	btree_node_t *node_stack[20], *n;
 	btree_node_t *connection_point, *tree_cp_root;
+	btree_node_t *to_modify_sibling, *new_sibling;
 	int node_stack_indexes[20], stack_top, index, retries = -1;
 	int connection_point_stack_index;
 
 try_from_scratch:
 
 	ht_reset(tdata->ht);
+	to_modify_sibling = new_sibling = NULL;
 
 	if (++retries >= TX_NUM_RETRIES) {
 		tdata->lacqs++;
@@ -581,7 +679,8 @@ try_from_scratch:
 		connection_point = btree_delete_with_copy(key,
 		                                  node_stack, node_stack_indexes, stack_top,
 		                                  &tree_cp_root,
-		                                  &connection_point_stack_index, tdata);
+		                                  &connection_point_stack_index,
+		                                  &to_modify_sibling, &new_sibling, tdata);
 		if (connection_point == NULL) {
 			btree->root = tree_cp_root;
 		} else {
@@ -602,7 +701,8 @@ try_from_scratch:
 	connection_point = btree_delete_with_copy(key,
 	                                  node_stack, node_stack_indexes, stack_top,
 	                                  &tree_cp_root,
-	                                  &connection_point_stack_index, tdata);
+	                                  &connection_point_stack_index,
+	                                  &to_modify_sibling, &new_sibling, tdata);
 
 	int validation_retries = -1;
 validate_and_connect_copy:
@@ -667,6 +767,7 @@ int btree_update(btree_t *btree, map_key_t key, void *val, tdata_t *tdata)
 	tm_begin_ret_t status;
 	btree_node_t *node_stack[20];
 	btree_node_t *connection_point, *tree_cp_root;
+	btree_node_t *to_modify_sibling, *new_sibling;
 	int node_stack_indexes[20], stack_top, index;
 	int retries = -1;
 	int connection_point_stack_index;
@@ -675,6 +776,7 @@ int btree_update(btree_t *btree, map_key_t key, void *val, tdata_t *tdata)
 try_from_scratch:
 
 	ht_reset(tdata->ht);
+	to_modify_sibling = new_sibling = NULL;
 
 	if (++retries >= TX_NUM_RETRIES) {
 		tdata->lacqs++;
@@ -703,13 +805,15 @@ try_from_scratch:
 			connection_point = btree_insert_with_copy(key, val, 
 			                                  node_stack, node_stack_indexes, stack_top,
 			                                  &tree_cp_root,
-			                                  &connection_point_stack_index, tdata);
+			                                  &connection_point_stack_index,
+			                                  &to_modify_sibling, &new_sibling, tdata);
 			ret = 1;
 		} else {
 			connection_point = btree_delete_with_copy(key,
 			                                  node_stack, node_stack_indexes, stack_top,
 			                                  &tree_cp_root,
-			                                  &connection_point_stack_index, tdata);
+			                                  &connection_point_stack_index,
+			                                  &to_modify_sibling, &new_sibling, tdata);
 			ret = 3;
 		}
 		if (connection_point == NULL) {
@@ -718,6 +822,7 @@ try_from_scratch:
 			index = node_stack_indexes[connection_point_stack_index];
 			connection_point->children[index] = tree_cp_root;
 		}
+		if (to_modify_sibling != NULL) to_modify_sibling->sibling = new_sibling;
 		pthread_spin_unlock(&btree->lock);
 		return ret;
 	}
@@ -745,13 +850,15 @@ try_from_scratch:
 		connection_point = btree_insert_with_copy(key, val, 
 		                                  node_stack, node_stack_indexes, stack_top,
 		                                  &tree_cp_root,
-		                                  &connection_point_stack_index, tdata);
+		                                  &connection_point_stack_index,
+		                                  &to_modify_sibling, &new_sibling, tdata);
 		ret = 1;
 	} else {
 		connection_point = btree_delete_with_copy(key,
 		                                  node_stack, node_stack_indexes, stack_top,
 		                                  &tree_cp_root,
-		                                  &connection_point_stack_index, tdata);
+		                                  &connection_point_stack_index,
+		                                  &to_modify_sibling, &new_sibling, tdata);
 		ret = 3;
 	}
 
@@ -797,6 +904,7 @@ validate_and_connect_copy:
 			index = node_stack_indexes[connection_point_stack_index];
 			connection_point->children[index] = tree_cp_root;
 		}
+		if (to_modify_sibling != NULL) to_modify_sibling->sibling = new_sibling;
 		TX_END(0);
 	} else {
 		tdata->tx_aborts++;
@@ -845,7 +953,7 @@ int map_lookup(void *map, void *tdata, map_key_t key)
 
 int map_rquery(void *map, void *tdata, map_key_t key1, map_key_t key2)
 {
-	return 0;
+	return btree_rquery(map, key1, key2);
 }
 
 int map_insert(void *map, void *tdata, map_key_t key, void *value)
