@@ -57,12 +57,12 @@ static inline void tdata_add(tdata_t *d1, tdata_t *d2, tdata_t *dst)
 /******************************************************************************/
 /******************************************************************************/
 
-int btree_lookup(btree_t *btree, map_key_t key)
+static int btree_traverse(btree_t *btree, map_key_t key,
+                          btree_node_t **_leaf, int *_index)
 {
 	int index;
 	btree_node_t *n = btree->root;
 
-	//> Empty tree.
 	if (!n) return 0;
 
 	while (!n->leaf) {
@@ -70,12 +70,84 @@ int btree_lookup(btree_t *btree, map_key_t key)
 		n = n->children[index];
 	}
 	index = btree_node_search(n, key);
-	return (KEY_CMP(n->keys[index], key) == 0);
+
+	*_leaf = n;
+	*_index = index;
+	return 1;
 }
 
-int btree_rquery(void *map, map_key_t key1, map_key_t key2)
+int btree_lookup(btree_t *btree, map_key_t key)
 {
-	return 0;
+	int index;
+	btree_node_t *leaf;
+
+	if (btree_traverse(btree, key, &leaf, &index) == 0)
+		return 0;
+	else
+		return (KEY_CMP(leaf->keys[index], key) == 0);
+}
+
+static __thread map_key_t rquery_result[1000];
+static __thread btree_node_t *rquery_nodes[20];
+
+static int get_keys_from_rquery_nodes(map_key_t key1, map_key_t key2, int nnodes)
+{
+	int i, j, index = 0;
+	btree_node_t *n;
+	for (i = 0, n = rquery_nodes[i]; i < nnodes; i++) {
+		for (j = 0; j < n->no_keys; j++)
+			if (KEY_CMP(n->keys[j], key1) >= 0 && KEY_CMP(n->keys[j], key2) <= 0)
+				rquery_result[index++] = n->keys[j];
+	}
+	return index;
+}
+
+static int get_rquery_nodes(btree_node_t *leaf, map_key_t key2)
+{
+	btree_node_t *n = leaf;
+	int nnodes = 0;
+	while (n != NULL && KEY_CMP(n->keys[n->no_keys-1], key2) < 0) {
+		rquery_nodes[nnodes++] = n;
+		n = n->sibling;
+	}
+	if (n != NULL) rquery_nodes[nnodes++] = n;
+	return nnodes;
+}
+
+int btree_rquery(btree_t *btree, map_key_t key1, map_key_t key2)
+{
+	tm_begin_ret_t status;
+	int index, i, nkeys = 0, nnodes = 0, retries = TX_NUM_RETRIES;
+	btree_node_t *leaf;
+
+	if (btree_traverse(btree, key1, &leaf, &index) == 0) return 0;
+	if (KEY_CMP(leaf->keys[index], key2) > 0) return 0;
+	
+	//> First try with transactions
+	while (retries-- > 0) {
+		status = TX_BEGIN(0);
+		if (status == TM_BEGIN_SUCCESS) {
+			nnodes = get_rquery_nodes(leaf, key2);
+			TX_END(0);
+			break;
+		} else {
+		}
+	}
+
+	//> Finally resort to the global lock
+	if (retries == 0) {
+		pthread_spin_lock(&btree->lock);
+		nnodes = get_rquery_nodes(leaf, key2);
+		pthread_spin_unlock(&btree->lock);
+	}
+
+//	nkeys = get_keys_from_rquery_nodes(key1, key2, nnodes);
+//	printf("NKEYS: %d", nkeys);
+//	for (i = 0; i < nkeys; i++)
+//		printf("-> %d", rquery_result[i]);
+//	printf("\n");
+
+	return 1;
 }
 
 void btree_traverse_stack(btree_t *btree, map_key_t key,
