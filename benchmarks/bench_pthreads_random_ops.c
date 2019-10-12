@@ -97,15 +97,16 @@ void *thread_fn(void *arg)
 				exit(1);
 			}
 		}
-//		} else if (choice  < clargs.lookup_frac + clargs.insert_frac) {
+//		} else if (choice < clargs.lookup_frac + clargs.rquery_frac
+//		                                       + clargs.insert_frac) {
 //			//> Insertion
 //			data->operations_performed[OPS_INSERT]++;
-//			ret = rbt_insert(rbt, data->rbt_thread_data, key, NULL);
+//			ret = map_insert(map, data->map_tdata, key, NULL);
 //			data->operations_succeeded[OPS_INSERT] += ret;
 //		} else {
 //			//> Deletion
 //			data->operations_performed[OPS_DELETE]++;
-//			ret = rbt_delete(rbt, data->rbt_thread_data, key);
+//			ret = map_delete(map, data->map_tdata, key);
 //			data->operations_succeeded[OPS_DELETE] += ret;
 //		}
 		data->operations_succeeded[OPS_TOTAL] += ret;
