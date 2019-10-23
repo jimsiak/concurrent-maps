@@ -256,9 +256,8 @@ static int treap_seq_rquery(treap_t *treap, map_key_t key1, map_key_t key2, int 
 }
 
 //> Splits the treap in two treaps.
-//> After the execution 'treap' points to the left part of the treap
-//> and a reference to the right one is returned
-static treap_t *treap_split(treap_t *treap)
+//> The left part is returned and the right part is put in *right_part
+static treap_t *treap_split(treap_t *treap, treap_t **right_part)
 {
 	int i;
 	treap_t *right_treap;
@@ -274,9 +273,11 @@ static treap_t *treap_split(treap_t *treap)
 	} else {
 		right_treap->root = treap_node_external_split(treap->root);
 	}
-	return right_treap;
+	*right_part = right_treap;
+	return treap;
 }
 
+//> Joins treap_left and treap_right and returns the joint treap
 static treap_t *treap_join(treap_t *treap_left, treap_t *treap_right)
 {
 	treap_node_internal_t *new_internal;
