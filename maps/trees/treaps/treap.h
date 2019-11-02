@@ -211,15 +211,51 @@ static map_key_t treap_max_key(treap_t *treap)
 	return external->keys[external->nr_keys-1];
 }
 
+static map_key_t treap_min_key(treap_t *treap)
+{
+	treap_node_internal_t *internal;
+	treap_node_external_t *external;
+	void *curr = treap->root;
+
+	while (treap_node_is_internal(curr)) {
+		internal = curr;
+		curr = internal->left;
+	}
+	external = curr;
+	return external->keys[0];
+}
+
+static unsigned int treap_size_rec(void *root)
+{
+	treap_node_internal_t *internal;
+	treap_node_external_t *external;
+
+	if (root == NULL) return 0;
+
+	if (treap_node_is_internal(root)) {
+		internal = root;
+		return treap_size_rec(internal->left) + treap_size_rec(internal->right);
+	} else {
+		external = root;
+		return external->nr_keys;
+	}
+}
+
+static unsigned int treap_size(treap_t *treap)
+{
+	if (!treap->root) return 0;
+	else return treap_size_rec(treap->root);
+}
+
 static treap_t *treap_new()
 {
 	treap_t *ret;
 	XMALLOC(ret, 1);
 	ret->root = NULL;
 
-	//> FIXME
-	nalloc_internal = nalloc_thread_init(0, sizeof(treap_node_internal_t));
-	nalloc_external = nalloc_thread_init(0, sizeof(treap_node_external_t));
+//	//> FIXME
+//	nalloc_internal = nalloc_thread_init(0, sizeof(treap_node_internal_t));
+//	nalloc_external = nalloc_thread_init(0, sizeof(treap_node_external_t));
 
 #	if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM) || defined(SYNC_RCU_HTM)
 	pthread_spin_init(&ret->lock, PTHREAD_PROCESS_SHARED);
