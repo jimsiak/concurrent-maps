@@ -190,7 +190,7 @@ static int treap_seq_update(treap_t *treap, map_key_t key, void *value)
 	//> 1. Empty treap, insert
 	if (stack_sz == 0) {
 		treap->root = treap_node_new(key, value, 0);
-		return 1; // XXX
+		return 1;
 	}
 
 	external = stack_pop(&stack);
@@ -198,7 +198,7 @@ static int treap_seq_update(treap_t *treap, map_key_t key, void *value)
 
 	if (key_index == -1) {
 		_do_insert(treap, external, &stack, key, value);
-		return 1; // XXX
+		return 1;
 	} else {
 		_do_delete(treap, external, &stack, key_index);
 		return 3;
@@ -263,6 +263,7 @@ static treap_t *treap_split(treap_t *treap, treap_t **right_part)
 	treap_t *right_treap;
 	treap_node_internal_t *internal;
 
+	*right_part = NULL;
 	if (treap->root == NULL) return NULL;
 
 	right_treap = treap_new();
@@ -281,6 +282,9 @@ static treap_t *treap_split(treap_t *treap, treap_t **right_part)
 static treap_t *treap_join(treap_t *treap_left, treap_t *treap_right)
 {
 	treap_node_internal_t *new_internal;
+
+	if (treap_left->root == NULL) return treap_right;
+	else if (treap_right->root == NULL) return treap_left;
 
 	new_internal = treap_node_new(treap_max_key(treap_left), NULL, 1);
 	new_internal->left = treap_left->root;
