@@ -82,7 +82,7 @@ static char treap_node_is_internal(void *node)
 	char *chr_ptr = (char *)node;
 	char magic_number = chr_ptr[0];
 	if (magic_number != TREAP_NODE_MAGIC_NUMBER) {
-		printf("treap node magic number is different than %d (it is %d)\n",
+		printf("Treap node magic number is different than %d (it is %d)\n",
 		       TREAP_NODE_MAGIC_NUMBER, magic_number);
 		return -1;
 	}
