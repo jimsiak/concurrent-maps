@@ -5,7 +5,7 @@ OPT_LEVEL ?= -O3
 CFLAGS += $(OPT_LEVEL)
 
 ## Ignore unused variable/parameter warnings.
-#CFLAGS += -Wno-unused-variable -Wno-unused-parameter -Wno-unused-but-set-variable
+#CFLAGS += -Wno-unused-variable -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function
 #CFLAGS += -Wno-array-bounds
 
 ## Number of transactional retries before resorting to non-tx fallback.
@@ -41,6 +41,18 @@ x.btree.cg_htm: $(SOURCE_FILES) maps/trees/btrees/seq.c
 	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_HTM
 x.btree.rcu_htm: $(SOURCE_FILES) maps/trees/btrees/rcu-htm.c
 	$(CC) $(CFLAGS) $^ -o $@
+
+## Treaps
+x.treap.seq: $(SOURCE_FILES) maps/trees/treaps/seq.c
+	$(CC) $(CFLAGS) $^ -o $@
+x.treap.cg_spin: $(SOURCE_FILES) maps/trees/treaps/seq.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_SPINLOCK
+x.treap.cg_htm: $(SOURCE_FILES) maps/trees/treaps/seq.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_HTM
+
+## Contention-adaptive generic scheme
+x.treap.ca_locks: $(SOURCE_FILES) maps/contention-adaptive/ca-locks.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSEQ_DS_TYPE_TREAP
 
 clean:
 	rm -f x.*
