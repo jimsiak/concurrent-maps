@@ -6,15 +6,14 @@
 #include "../../key/key.h"
 
 static int bst_violations, total_nodes, total_keys, leaf_keys;
-static int null_children_violations;
+static int null_children_violations, empty_internal_violations;
 static int not_full_nodes;
-static int leaves_level;
-static int leaves_at_same_level;
+static int leaves_level, leaves_at_same_level, leaves_empty;
 static int wrong_sibling_pointers;
 
 /**
  * Validates the following:
- * 1. Keys inside node are sorted.
+ * 1. Keys inside node are sorted (and there are no duplicates).
  * 2. Keys inside node are higher than min and less than or equal to max.
  * 3. Node is at least half-full.
  * 4. Internal nodes do not have null children.
@@ -23,6 +22,13 @@ static void btree_node_validate(btree_node_t *n, int min, int max, btree_t *btre
 {
 	int i;
 	map_key_t cur_min;
+
+	//> Some b-trees (e.g., blink lock-based by Yao et. al) may allow empty leaves
+	if (n->no_keys == 0) {
+		if (n->leaf) leaves_empty++;
+		else empty_internal_violations++;
+		return;
+	}
 
 	KEY_COPY(cur_min, n->keys[0]);
 
@@ -83,9 +89,11 @@ static int btree_validate_helper(btree_t *btree)
 	total_nodes = 0;
 	total_keys = leaf_keys = 0;
 	null_children_violations = 0;
+	empty_internal_violations = 0;
 	not_full_nodes = 0;
 	leaves_level = -1;
 	leaves_at_same_level = 1;
+	leaves_empty = 0;
 	wrong_sibling_pointers = 0;
 
 	btree_validate_rec(btree->root, -1, MAX_KEY, btree, 0);
@@ -94,7 +102,8 @@ static int btree_validate_helper(btree_t *btree)
 	check_btree_properties = (null_children_violations == 0) &&
 	                         (not_full_nodes == 0) &&
 	                         (leaves_at_same_level == 1) &&
-	                         (wrong_sibling_pointers == 0);
+	                         (wrong_sibling_pointers == 0) &&
+	                         (empty_internal_violations == 0);
 
 	printf("Validation:\n");
 	printf("=======================\n");
@@ -110,6 +119,9 @@ static int btree_validate_helper(btree_t *btree)
 	       (leaves_at_same_level == 1) ? "Yes [OK]" : "No [ERROR]", leaves_level);
 	printf("  |-- Wrong sibling pointers: %d [%s]\n", wrong_sibling_pointers,
 	       (wrong_sibling_pointers == 0) ? "OK" : "ERROR");
+	printf("  |-- Empty Internal nodes: %d [%s]\n", empty_internal_violations,
+	       (empty_internal_violations == 0) ? "OK" : "ERROR");
+	printf("  Number of Empty Leaf nodes: %d\n", leaves_empty);
 	printf("  Tree size: %8d\n", total_nodes);
 	printf("  Number of keys: %8d total / %8d in leaves\n", total_keys, leaf_keys);
 	printf("\n");
