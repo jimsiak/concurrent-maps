@@ -20,6 +20,12 @@ typedef struct btree_node_s {
 	struct btree_node_s *sibling;
 	map_key_t keys[2*BTREE_ORDER];
 	__attribute__((aligned(16))) void *children[2*BTREE_ORDER + 1];
+#	ifdef RWLOCK_PER_NODE
+	pthread_rwlock_t lock;
+#	endif
+#	ifdef HIGHKEY_PER_NODE
+	map_key_t highkey;
+#	endif
 } __attribute__((packed)) btree_node_t;
 
 typedef struct {
@@ -38,8 +44,14 @@ static __thread void *nalloc;
 static btree_node_t *btree_node_new(char leaf)
 {
 	btree_node_t *ret = nalloc_alloc_node(nalloc);
-	ret->no_keys = 0;
+	memset(ret, 0, sizeof(*ret));
 	ret->leaf = leaf;
+#	ifdef RWLOCK_PER_NODE
+	pthread_rwlock_init(&ret->lock, NULL);
+#	endif
+#	ifdef HIGHKEY_PER_NODE
+	ret->highkey = MAX_KEY;
+#	endif
 	return ret;
 }
 
@@ -88,6 +100,79 @@ static void btree_node_insert_index(btree_node_t *n, int index, map_key_t key,
 	n->no_keys++;
 }
 
+/**
+ * Splits a leaf node into two leaf nodes which also contain the newly
+ * inserted key 'key'.
+ **/ 
+btree_node_t *btree_leaf_split(btree_node_t *n, int index, map_key_t key, void *ptr)
+{
+       int i;
+       btree_node_t *rnode = btree_node_new(1);
+
+       //> Move half of the keys on the new node.
+       for (i=BTREE_ORDER; i < 2 *BTREE_ORDER; i++) {
+               KEY_COPY(rnode->keys[i - BTREE_ORDER], n->keys[i]);
+               rnode->children[i - BTREE_ORDER] = n->children[i];
+       }
+       rnode->children[i - BTREE_ORDER] = n->children[i];
+
+       //> Update number of keys for the two split nodes.
+       n->no_keys = BTREE_ORDER;
+       rnode->no_keys = BTREE_ORDER;
+
+       //> Insert the new key in the appropriate node.
+       if (index < BTREE_ORDER) btree_node_insert_index(n, index, key, ptr);
+       else   btree_node_insert_index(rnode, index - BTREE_ORDER, key, ptr);
+
+       //> Fix the sibling pointer of `n`
+       rnode->sibling = n->sibling;
+       n->sibling = rnode;
+
+       return rnode;
+}
+
+/**
+ * Splits an internal node into two internal nodes.
+ **/ 
+static btree_node_t *btree_internal_split(btree_node_t *n, int index, map_key_t key,
+                                          void *ptr, map_key_t *key_left_outside)
+{
+	int i, mid_index;
+	btree_node_t *rnode = btree_node_new(0);
+
+	mid_index = BTREE_ORDER;
+	if (index < BTREE_ORDER) mid_index--;
+
+	KEY_COPY(*key_left_outside, n->keys[mid_index]);
+
+	//> Move half of the keys on the new node.
+	for (i=mid_index+1; i < 2 *BTREE_ORDER; i++) {
+		KEY_COPY(rnode->keys[i - (mid_index+1)], n->keys[i]);
+		rnode->children[i - (mid_index+1)] = n->children[i];
+	}
+	rnode->children[i - (mid_index+1)] = n->children[i];
+
+	//> Update number of keys for the two split nodes.
+	n->no_keys = mid_index;
+	rnode->no_keys = 2 * BTREE_ORDER - mid_index - 1;
+
+	//> Insert the new key in the appropriate node.
+	if (n->no_keys < BTREE_ORDER) {
+		btree_node_insert_index(n, index, key, ptr);
+	} else if (index == mid_index) {
+		btree_node_insert_index(rnode, 0, n->keys[mid_index],
+		                                  n->children[mid_index+1]);
+		rnode->children[0] = ptr;
+		KEY_COPY(*key_left_outside, key);
+	} else {
+		btree_node_insert_index(rnode, index - (mid_index+1), key, ptr);
+	}
+
+	return rnode;
+}
+
+
+
 static void btree_node_print(btree_node_t *n)
 {
 	int i;
@@ -100,6 +185,9 @@ static void btree_node_print(btree_node_t *n)
 
 	for (i=0; i < n->no_keys; i++)
 		KEY_PRINT(n->keys[i], " ", " |");
+#ifdef HIGHKEY_PER_NODE
+	printf(" highkey = %d ", n->highkey);
+#endif
 	printf("]");
 	printf("%s\n", n->leaf ? " LEAF" : "");
 }
