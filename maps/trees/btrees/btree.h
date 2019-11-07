@@ -168,10 +168,11 @@ static btree_node_t *btree_internal_split(btree_node_t *n, int index, map_key_t 
 		btree_node_insert_index(rnode, index - (mid_index+1), key, ptr);
 	}
 
+	rnode->sibling = n->sibling;
+	n->sibling = rnode;
+
 	return rnode;
 }
-
-
 
 static void btree_node_print(btree_node_t *n)
 {
