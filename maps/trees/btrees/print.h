@@ -4,6 +4,25 @@
 #include <stdio.h>
 #include "btree.h"
 
+static void btree_node_print(btree_node_t *n)
+{
+	int i;
+
+	printf("btree_node: [");
+	if (!n) {
+		printf("]\n");
+		return;
+	}
+
+	for (i=0; i < n->no_keys; i++)
+		KEY_PRINT(n->keys[i], " ", " |");
+#ifdef HIGHKEY_PER_NODE
+	printf(" highkey = %d ", n->highkey);
+#endif
+	printf("]");
+	printf("%s\n", n->leaf ? " LEAF" : "");
+}
+
 void btree_print_rec(btree_node_t *root, int level)
 {
 	int i;
