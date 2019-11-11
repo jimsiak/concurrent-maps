@@ -102,16 +102,14 @@ static void get_mtconf_options(unsigned int *nr_cpus, unsigned int **cpus)
 static void mt_conf_print(unsigned int ncpus, unsigned int *cpus)
 {
 	unsigned int i;
-	char string[30];
-	int offset = 0;
 
-	offset += sprintf(string + offset, "MT_CONF=");
-	for (i=0; i < ncpus; i++) {
-		if (i != 0)
-			offset += sprintf(string + offset, ",");
-		offset += sprintf(string + offset, "%u", cpus[i]);
-	}
-	log_info("%s\n", string);
+	printf("MT_CONF=");
+    for (i=0; i < ncpus; i++) {
+        if (i != 0)
+            printf(",");
+        printf("%u", cpus[i]);
+    }
+    printf("\n");
 }
 
 #endif /* _AFF_H_ */
