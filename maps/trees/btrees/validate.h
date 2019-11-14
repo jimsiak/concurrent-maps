@@ -100,7 +100,9 @@ static int btree_validate_helper(btree_t *btree)
 
 	check_bst = (bst_violations == 0);
 	check_btree_properties = (null_children_violations == 0) &&
+#ifndef NOT_FULL_NODES_ALLOWED
 	                         (not_full_nodes == 0) &&
+#endif
 	                         (leaves_at_same_level == 1) &&
 	                         (wrong_sibling_pointers == 0) &&
 	                         (empty_internal_violations == 0);
@@ -114,7 +116,11 @@ static int btree_validate_helper(btree_t *btree)
 	printf("  |-- NULL Children Violation: %s\n",
 	       (null_children_violations == 0) ? "No [OK]" : "Yes [ERROR]");
 	printf("  |-- Not-full Nodes: %s\n",
+#ifndef NOT_FULL_NODES_ALLOWED
 	       (not_full_nodes == 0) ? "No [OK]" : "Yes [ERROR]");
+#else
+	       (not_full_nodes == 0) ? "No [OK]" : "Yes [ALLOWED]");
+#endif
 	printf("  |-- Leaves at same level: %s [ Level %d ]\n",
 	       (leaves_at_same_level == 1) ? "Yes [OK]" : "No [ERROR]", leaves_level);
 	printf("  |-- Wrong sibling pointers: %d [%s]\n", wrong_sibling_pointers,
