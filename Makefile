@@ -5,8 +5,7 @@ OPT_LEVEL ?= -O3
 CFLAGS += $(OPT_LEVEL)
 
 ## Ignore unused variable/parameter warnings.
-#CFLAGS += -Wno-unused-variable -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function
-#CFLAGS += -Wno-array-bounds
+CFLAGS += -Wno-unused-variable -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function -Wno-array-bounds
 
 ## Number of transactional retries before resorting to non-tx fallback.
 CFLAGS += -DTX_NUM_RETRIES=10
@@ -40,6 +39,8 @@ x.btree.cg_spin: $(SOURCE_FILES) maps/trees/btrees/seq.c
 x.btree.cg_htm: $(SOURCE_FILES) maps/trees/btrees/seq.c
 	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_HTM
 x.btree.rcu_htm: $(SOURCE_FILES) maps/trees/btrees/rcu-htm.c
+	$(CC) $(CFLAGS) $^ -o $@
+x.btree.blink_locks: $(SOURCE_FILES) maps/trees/btrees/blink-lock.c
 	$(CC) $(CFLAGS) $^ -o $@
 
 ## Treaps
