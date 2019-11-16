@@ -10,5 +10,7 @@ typedef int map_key_t;
 
 #define KEY_CMP(k1, k2) ((k1) - (k2))
 #define KEY_COPY(dst, src) ((dst) = (src))
+#define KEY_GET(k, someint) ((k) = (someint))
+#define KEY_ADD(dst, k1, k2) ((dst) = (k1) + (k2))
 
 #endif /* _KEY_INT_H_ */

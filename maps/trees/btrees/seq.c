@@ -66,8 +66,10 @@ static int btree_rquery(btree_t *btree, map_key_t key1, map_key_t key2, int *len
 	nkeys = 0;
 	n = leaf;
 	while (n != NULL) {
-		for (i = index; i < n->no_keys && KEY_CMP(n->keys[i], key2) <= 0; i++)
-			rquery_result[nkeys++] = n->keys[i];
+		for (i = index; i < n->no_keys && KEY_CMP(n->keys[i], key2) <= 0; i++) {
+			KEY_COPY(rquery_result[nkeys], n->keys[i]);
+			nkeys++;
+		}
 		if (i < n->no_keys && KEY_CMP(n->keys[i], key2) >= 0)
 			break;
 		n = n->sibling;
@@ -293,7 +295,7 @@ static int btree_borrow_keys(btree_node_t *c, btree_node_t *p, int pindex)
 			for (i=0; i < sibling->no_keys-1; i++)
 				KEY_COPY(sibling->keys[i], sibling->keys[i+1]);
 			for (i=0; i < sibling->no_keys; i++)
-				KEY_COPY(sibling->children[i], sibling->children[i+1]);
+				sibling->children[i] = sibling->children[i+1];
 			sibling->no_keys--;
 			c->no_keys++;
 			return 1;
@@ -431,7 +433,7 @@ void map_tdata_add(void *d1, void *d2, void *dst)
 #	endif
 }
 
-int map_lookup(void *map, void *thread_data, int key)
+int map_lookup(void *map, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 
@@ -473,7 +475,7 @@ int map_rquery(void *map, void *thread_data, map_key_t key1, map_key_t key2)
 	return ret; 
 }
 
-int map_insert(void *map, void *thread_data, int key, void *value)
+int map_insert(void *map, void *thread_data, map_key_t key, void *value)
 {
 	int ret = 0;
 
@@ -493,7 +495,7 @@ int map_insert(void *map, void *thread_data, int key, void *value)
 	return ret;
 }
 
-int map_delete(void *map, void *thread_data, int key)
+int map_delete(void *map, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 
@@ -514,7 +516,7 @@ int map_delete(void *map, void *thread_data, int key)
 	return ret;
 }
 
-int map_update(void *map, void *thread_data, int key, void *value)
+int map_update(void *map, void *thread_data, map_key_t key, void *value)
 {
 	int ret = 0;
 
@@ -550,4 +552,9 @@ char *map_name()
 #	else
 	return "btree-sequential";
 #	endif
+}
+
+void map_print(void *map)
+{
+	btree_print(map);
 }

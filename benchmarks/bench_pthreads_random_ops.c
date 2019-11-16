@@ -20,6 +20,7 @@
 #include "../lib/alloc.h"
 #include "../lib/timers.h"
 #include "../lib/log.h"
+#include "../maps/key/key.h"
 
 pthread_barrier_t start_barrier;
 
@@ -37,7 +38,8 @@ void *thread_fn(void *arg)
 	thread_data_t *data = arg;
 	int ret, tid = data->tid, cpu = data->cpu;
 	void *map = data->map;
-	int choice, key;
+	int choice, randint;
+	map_key_t key;
 #	if defined(WORKLOAD_FIXED)
 	int ops_performed = 0;
 #	endif
@@ -67,7 +69,8 @@ void *thread_fn(void *arg)
 
 		//> Generate random number;
 		choice = nextNatural(100);
-		key = nextNatural(clargs.max_key);
+		randint = nextNatural(clargs.max_key);
+		KEY_GET(key, randint);
 
 		data->operations_performed[OPS_TOTAL]++;
 
@@ -80,7 +83,10 @@ void *thread_fn(void *arg)
 		} else if (choice < clargs.lookup_frac + clargs.rquery_frac) {
 			//> Range-Query
 			data->operations_performed[OPS_RQUERY]++;
-			ret = map_rquery(map, data->map_tdata, key, key+100);
+			map_key_t key2;
+			KEY_GET(key2, 100);
+			KEY_ADD(key2, key, key2);
+			ret = map_rquery(map, data->map_tdata, key, key2);
 			data->operations_succeeded[OPS_RQUERY] += ret;
 		} else {
 			//> Update

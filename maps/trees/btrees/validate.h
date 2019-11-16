@@ -18,7 +18,8 @@ static int wrong_sibling_pointers;
  * 3. Node is at least half-full.
  * 4. Internal nodes do not have null children.
  **/
-static void btree_node_validate(btree_node_t *n, int min, int max, btree_t *btree)
+static void btree_node_validate(btree_node_t *n, btree_t *btree,
+                                map_key_t min, map_key_t max)
 {
 	int i;
 
@@ -51,8 +52,8 @@ static void btree_node_validate(btree_node_t *n, int min, int max, btree_t *btre
 				null_children_violations++;
 }
 
-static btree_node_t *btree_validate_rec(btree_node_t *root, int min, int max,
-                                        btree_t *btree, int level)
+static btree_node_t *btree_validate_rec(btree_node_t *root, btree_t *btree,
+                                        map_key_t min, map_key_t max, int level)
 {
 	btree_node_t *sib;
 	int i;
@@ -62,7 +63,7 @@ static btree_node_t *btree_validate_rec(btree_node_t *root, int min, int max,
 	total_nodes++;
 	total_keys += root->no_keys;
 
-	btree_node_validate(root, min, max, btree);
+	btree_node_validate(root, btree, min, max);
 	
 	if (root->leaf) {
 		if (leaves_level == -1) leaves_level = level;
@@ -72,10 +73,10 @@ static btree_node_t *btree_validate_rec(btree_node_t *root, int min, int max,
 	}
 
 	for (i=0; i <= root->no_keys; i++) {
-		sib = btree_validate_rec(root->children[i],
+		sib = btree_validate_rec(root->children[i], btree,
 		                         i == 0 ? min : root->keys[i-1],
 		                         i == root->no_keys ? max : root->keys[i],
-		                         btree, level+1);
+		                         level+1);
 		if (i < root->no_keys && sib != NULL && sib != root->children[i+1])
 			wrong_sibling_pointers++;
 	}
@@ -96,7 +97,7 @@ static int btree_validate_helper(btree_t *btree)
 	leaves_empty = 0;
 	wrong_sibling_pointers = 0;
 
-	btree_validate_rec(btree->root, -1, MAX_KEY, btree, 0);
+	btree_validate_rec(btree->root, btree, MIN_KEY, MAX_KEY, 0);
 
 	check_bst = (bst_violations == 0);
 	check_btree_properties = (null_children_violations == 0) &&

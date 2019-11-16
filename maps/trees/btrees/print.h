@@ -17,7 +17,7 @@ static void btree_node_print(btree_node_t *n)
 	for (i=0; i < n->no_keys; i++)
 		KEY_PRINT(n->keys[i], " ", " |");
 #ifdef HIGHKEY_PER_NODE
-	printf(" highkey = %d ", n->highkey);
+	KEY_PRINT(n->highkey, " highkey = ", " ");
 #endif
 	printf("]");
 	printf("%s\n", n->leaf ? " LEAF" : "");
@@ -41,12 +41,8 @@ void btree_print_rec(btree_node_t *root, int level)
 
 void btree_print(btree_t *btree)
 {
-	if (!btree) {
-		printf("Empty tree\n");
-		return;
-	}
-
-	btree_print_rec(btree->root, 0);
+	if (!btree) printf("Empty tree\n");
+	else btree_print_rec(btree->root, 0);
 }
 
 #endif /* _PRINT_H_ */

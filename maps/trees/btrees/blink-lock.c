@@ -32,6 +32,7 @@
 #include <limits.h> //> For INT_MAX
 #include <pthread.h> //> pthread_spinlock_t
 
+#include "../../key/key.h"
 #define RWLOCK_PER_NODE
 #define HIGHKEY_PER_NODE
 #define SYNC_CG_SPINLOCK
@@ -50,7 +51,7 @@
  * If the key is inside the range of n the appropriate child pointer
  * is returned, otherwise n's right node is returned.
  **/
-static void *btree_node_scan(btree_node_t *n, key_t key, int *link_ptr_ret,
+static void *btree_node_scan(btree_node_t *n, map_key_t key, int *link_ptr_ret,
                              int *index)
 {
 	int i = 0;
@@ -65,7 +66,7 @@ static void *btree_node_scan(btree_node_t *n, key_t key, int *link_ptr_ret,
 	return n->children[i];
 }
 
-static int btree_lookup(btree_t *btree, key_t key)
+static int btree_lookup(btree_t *btree, map_key_t key)
 {
 	int link_ptr_ret = 0, index = 0, not_locked, ret;
 	btree_node_t *n, *t;
@@ -107,7 +108,7 @@ TOP:
 	return ret;
 }
 
-static void btree_traverse_stack(btree_t *btree, key_t key,
+static void btree_traverse_stack(btree_t *btree, map_key_t key,
                           btree_node_t **node_stack, int *node_stack_indexes,
                           int *stack_top)
 {
@@ -145,7 +146,7 @@ TOP:
 	node_stack_indexes[*stack_top] = index;
 }
 
-static btree_node_t *move_right(btree_node_t *n, key_t key, int *index)
+static btree_node_t *move_right(btree_node_t *n, map_key_t key, int *index)
 {
 	int link_ptr_ret;
 	btree_node_t *t = n;
@@ -160,7 +161,7 @@ static btree_node_t *move_right(btree_node_t *n, key_t key, int *index)
 	return t;
 }
 
-static int _do_insert(btree_t *btree, key_t key, void *val,
+static int _do_insert(btree_t *btree, map_key_t key, void *val,
                       btree_node_t **node_stack, int *node_stack_indexes,
                       int stack_top)
 {
@@ -233,7 +234,7 @@ static int _do_insert(btree_t *btree, key_t key, void *val,
 	return 1;
 }
 
-static int btree_insert(btree_t *btree, key_t key, void *val)
+static int btree_insert(btree_t *btree, map_key_t key, void *val)
 {
 	btree_node_t *n;
 	btree_node_t *node_stack[20];
@@ -259,7 +260,7 @@ static int btree_insert(btree_t *btree, key_t key, void *val)
 	return _do_insert(btree, key, val, node_stack, node_stack_indexes, stack_top);
 }
 
-static int _do_delete(key_t key, btree_node_t **node_stack,
+static int _do_delete(map_key_t key, btree_node_t **node_stack,
                       int *node_stack_indexes, int stack_top)
 {
 	int index = node_stack_indexes[stack_top];
@@ -273,7 +274,7 @@ static int _do_delete(key_t key, btree_node_t **node_stack,
 	return ret;
 }
 
-static int btree_delete(btree_t *btree, key_t key)
+static int btree_delete(btree_t *btree, map_key_t key)
 {
 	btree_node_t *node_stack[20];
 	int node_stack_indexes[20];
@@ -289,7 +290,7 @@ static int btree_delete(btree_t *btree, key_t key)
 	return _do_delete(key, node_stack, node_stack_indexes, stack_top);
 }
 
-static int btree_update(btree_t *btree, key_t key, void *val)
+static int btree_update(btree_t *btree, map_key_t key, void *val)
 {
 	btree_node_t *n;
 	btree_node_t *node_stack[20];
@@ -345,34 +346,34 @@ void map_tdata_add(void *d1, void *d2, void *dst)
 {
 }
 
-int map_lookup(void *map, void *thread_data, int key)
+int map_lookup(void *map, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 	ret = btree_lookup(map, key);
 	return ret; 
 }
 
-int map_rquery(void *map, void *thread_data, int key1, int key2)
+int map_rquery(void *map, void *thread_data, map_key_t key1, map_key_t key2)
 {
 	printf("Range Query operation is not implemented\n");
 	return 0;
 }
 
-int map_insert(void *map, void *thread_data, int key, void *value)
+int map_insert(void *map, void *thread_data, map_key_t key, void *value)
 {
 	int ret = 0;
 	ret = btree_insert(map, key, value);
 	return ret;
 }
 
-int map_delete(void *map, void *thread_data, int key)
+int map_delete(void *map, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 	ret = btree_delete(map, key);
 	return ret;
 }
 
-int map_update(void *map, void *thread_data, int key, void *value)
+int map_update(void *map, void *thread_data, map_key_t key, void *value)
 {
 	int ret = 0;
 	ret = btree_update(map, key, value);

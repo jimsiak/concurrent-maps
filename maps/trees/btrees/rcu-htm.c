@@ -95,9 +95,12 @@ static int get_keys_from_rquery_nodes(map_key_t key1, map_key_t key2, int nnodes
 	int i, j, index = 0;
 	btree_node_t *n;
 	for (i = 0, n = rquery_nodes[i]; i < nnodes; i++) {
-		for (j = 0; j < n->no_keys; j++)
-			if (KEY_CMP(n->keys[j], key1) >= 0 && KEY_CMP(n->keys[j], key2) <= 0)
-				rquery_result[index++] = n->keys[j];
+		for (j = 0; j < n->no_keys; j++) {
+			if (KEY_CMP(n->keys[j], key1) >= 0 && KEY_CMP(n->keys[j], key2) <= 0) {
+				KEY_COPY(rquery_result[index], n->keys[j]);
+				index++;
+			}
+		}
 	}
 	return index;
 }
@@ -266,9 +269,10 @@ btree_node_t *btree_insert_with_copy(map_key_t key, void *val,
 	btree_node_t *cur = NULL, *cur_cp = NULL, *cur_cp_prev;
 	btree_node_t *conn_point;
 	int index, i;
-	map_key_t key_to_add = key;
+	map_key_t key_to_add;
 	void *ptr_to_add = val;
 
+	KEY_COPY(key_to_add, key);
 	while (1) {
 		//> We surpassed the root. New root needs to be created.
 		if (stack_top < 0) {
@@ -536,16 +540,16 @@ btree_node_t *btree_borrow_keys_with_copies(btree_node_t *c, btree_node_t *p, in
 			parent_cp->children[pindex - 1] = sibling_cp;
 			parent_cp->children[pindex] = c;
 
-			for (i = c->no_keys-1; i >= 0; i--) c->keys[i+1] = c->keys[i];
+			for (i = c->no_keys-1; i >= 0; i--) KEY_COPY(c->keys[i+1], c->keys[i]);
 			for (i = c->no_keys; i >= 0; i--) c->children[i+1] = c->children[i];
 			if (!c->leaf) {
 				KEY_COPY(c->keys[0], parent_cp->keys[pindex-1]);
 				c->children[0] = sibling_cp->children[sibling_cp->no_keys];
-				parent_cp->keys[pindex-1] = sibling_cp->keys[sibling_cp->no_keys-1];
+				KEY_COPY(parent_cp->keys[pindex-1], sibling_cp->keys[sibling_cp->no_keys-1]);
 			} else {
 				KEY_COPY(c->keys[0], sibling_cp->keys[sibling_cp->no_keys-1]);
 				c->children[1] = sibling_cp->children[sibling_cp->no_keys];
-				parent_cp->keys[pindex-1] = sibling_cp->keys[sibling_cp->no_keys-2];
+				KEY_COPY(parent_cp->keys[pindex-1], sibling_cp->keys[sibling_cp->no_keys-2]);
 			}
 			sibling_cp->no_keys--;
 			c->no_keys++;
@@ -576,11 +580,11 @@ btree_node_t *btree_borrow_keys_with_copies(btree_node_t *c, btree_node_t *p, in
 			if (!c->leaf) {
 				KEY_COPY(c->keys[c->no_keys], parent_cp->keys[pindex]);
 				c->children[c->no_keys+1] = sibling_cp->children[0];
-				parent_cp->keys[pindex] = sibling_cp->keys[0];
+				KEY_COPY(parent_cp->keys[pindex], sibling_cp->keys[0]);
 			} else {
 				KEY_COPY(c->keys[c->no_keys], sibling_cp->keys[0]);
 				c->children[c->no_keys+1] = sibling_cp->children[1];
-				parent_cp->keys[pindex] = c->keys[c->no_keys];
+				KEY_COPY(parent_cp->keys[pindex], c->keys[c->no_keys]);
 			}
 			for (i=0; i < sibling_cp->no_keys-1; i++)
 				KEY_COPY(sibling_cp->keys[i], sibling_cp->keys[i+1]);

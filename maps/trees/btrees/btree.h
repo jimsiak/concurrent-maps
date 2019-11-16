@@ -139,11 +139,12 @@ static btree_node_t *btree_internal_split(btree_node_t *n, int index, map_key_t 
 {
 	int i, mid_index;
 	btree_node_t *rnode = btree_node_new(0);
+	map_key_t left_outside;
 
 	mid_index = BTREE_ORDER;
 	if (index < BTREE_ORDER) mid_index--;
 
-	KEY_COPY(*key_left_outside, n->keys[mid_index]);
+	KEY_COPY(left_outside, n->keys[mid_index]);
 
 	//> Move half of the keys on the new node.
 	for (i=mid_index+1; i < 2 *BTREE_ORDER; i++) {
@@ -163,7 +164,7 @@ static btree_node_t *btree_internal_split(btree_node_t *n, int index, map_key_t 
 		btree_node_insert_index(rnode, 0, n->keys[mid_index],
 		                                  n->children[mid_index+1]);
 		rnode->children[0] = ptr;
-		KEY_COPY(*key_left_outside, key);
+		KEY_COPY(left_outside, key);
 	} else {
 		btree_node_insert_index(rnode, index - (mid_index+1), key, ptr);
 	}
@@ -171,6 +172,7 @@ static btree_node_t *btree_internal_split(btree_node_t *n, int index, map_key_t 
 	rnode->sibling = n->sibling;
 	n->sibling = rnode;
 
+	KEY_COPY(*key_left_outside, left_outside);
 	return rnode;
 }
 
