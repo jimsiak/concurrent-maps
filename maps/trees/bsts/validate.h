@@ -12,9 +12,10 @@
 #	error "Tree type should be defined"
 #endif
 
-static int key_in_max_path, key_in_min_path;
+static map_key_t key_in_max_path, key_in_min_path;
 static int total_paths, total_nodes, bst_violations;
 static int min_path_len, max_path_len;
+
 static void _bst_validate_rec(bst_node_t *root, int _th)
 {
 	if (!root) return;
@@ -27,11 +28,11 @@ static void _bst_validate_rec(bst_node_t *root, int _th)
 
 	/* BST violation? */
 #	if defined(BST_INTERNAL)
-	if (left && left->key >= root->key)   bst_violations++;
+	if (left && KEY_CMP(left->key, root->key) >= 0)   bst_violations++;
 #	elif defined(BST_EXTERNAL)
-	if (left && left->key > root->key)    bst_violations++;
+	if (left && KEY_CMP(left->key, root->key) > 0)    bst_violations++;
 #	endif
-	if (right && right->key <= root->key) bst_violations++;
+	if (right && KEY_CMP(right->key, root->key) <= 0) bst_violations++;
 
 	/* We found a path (a node with at least one NULL child). */
 	if (!left || !right) {
@@ -39,11 +40,11 @@ static void _bst_validate_rec(bst_node_t *root, int _th)
 
 		if (_th <= min_path_len){
 			min_path_len = _th;
-			key_in_min_path = root->key;
+			KEY_COPY(key_in_min_path, root->key);
 		}
 		if (_th >= max_path_len){
 			max_path_len = _th;
-			key_in_max_path = root->key;
+			KEY_COPY(key_in_max_path, root->key);
 		}
 	}
 
@@ -72,8 +73,8 @@ static int bst_validate(bst_t *bst)
 	printf("  Tree size: %8d\n", total_nodes);
 	printf("  Total paths: %d\n", total_paths);
 	printf("  Min/max paths length: %d/%d\n", min_path_len, max_path_len);
-	printf("  Key of min path: %d\n", key_in_min_path);
-	printf("  Key of max path: %d\n", key_in_max_path);
+	KEY_PRINT(key_in_min_path, "  Key of min path: ", "\n");
+	KEY_PRINT(key_in_max_path, "  Key of max path: ", "\n");
 	printf("\n");
 
 	return check_bst;

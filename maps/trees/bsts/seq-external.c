@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "../../key/key.h"
+
 #include "bst.h"
 #include "print.h"
 #define BST_EXTERNAL
@@ -22,35 +24,31 @@
  * access path. `parent` is either leaf's parent (if `leaf` != NULL) or
  * NULL.
  **/
-static inline void _traverse(bst_t *bst, int key, bst_node_t **gparent,
-                                                  bst_node_t **parent,
-                                                  bst_node_t **leaf)
+static inline void _traverse(bst_t *bst, map_key_t key, bst_node_t **gparent,
+                             bst_node_t **parent, bst_node_t **leaf)
 {
 	*gparent = NULL;
 	*parent = NULL;
 	*leaf = bst->root;
 
-	if (*leaf == NULL)
-		return;
+	if (*leaf == NULL) return;
 
 	while (!IS_EXTERNAL_NODE(*leaf)) {
-		int leaf_key = (*leaf)->key;
-
 		*gparent = *parent;
 		*parent = *leaf;
-		*leaf = (key <= leaf_key) ? (*leaf)->left : (*leaf)->right;
+		*leaf = (KEY_CMP(key, (*leaf)->key) <= 0) ? (*leaf)->left : (*leaf)->right;
 	}
 }
 
-static int _bst_lookup_helper(bst_t *bst, int key)
+static int _bst_lookup_helper(bst_t *bst, map_key_t key)
 {
 	bst_node_t *gparent, *parent, *leaf;
 
 	_traverse(bst, key, &gparent, &parent, &leaf);
-	return (leaf && leaf->key == key);
+	return (leaf) && (KEY_CMP(leaf->key, key) == 0);
 }
 
-static int _bst_insert_helper(bst_t *bst, int key, void *value)
+static int _bst_insert_helper(bst_t *bst, map_key_t key, void *value)
 {
 	bst_node_t *gparent, *parent, *leaf;
 
@@ -63,33 +61,32 @@ static int _bst_insert_helper(bst_t *bst, int key, void *value)
 	}
 
 	// Key already in the tree.
-	if (leaf->key == key)
-		return 0;
+	if (KEY_CMP(leaf->key, key) == 0) return 0;
 
 	// Create new internal and leaf nodes.
 	bst_node_t *new_internal = bst_node_new(key, NULL);
-	if (key <= leaf->key) {
+	if (KEY_CMP(key, leaf->key) <= 0) {
 		new_internal->left = bst_node_new(key, value);
 		new_internal->right = leaf;
 	} else {
 		new_internal->left = leaf;
 		new_internal->right = bst_node_new(key, value);
-		new_internal->key = leaf->key;
+		KEY_COPY(new_internal->key, leaf->key);
 	}
-	if (!parent)                 bst->root = new_internal;
-	else if (key <= parent->key) parent->left = new_internal;
-	else                         parent->right = new_internal;
+	if (!parent)                             bst->root = new_internal;
+	else if (KEY_CMP(key, parent->key) <= 0) parent->left = new_internal;
+	else                                     parent->right = new_internal;
 	return 1;
 }
 
-static int _bst_delete_helper(bst_t *bst, int key)
+static int _bst_delete_helper(bst_t *bst, map_key_t key)
 {
 	bst_node_t *gparent, *parent, *leaf;
 
 	_traverse(bst, key, &gparent, &parent, &leaf);
 
 	// Empty tree or key not in the tree.
-	if (!leaf || leaf->key != key)
+	if (!leaf || KEY_CMP(leaf->key, key) != 0)
 		return 0;
 
 	// Only one node in the tree.
@@ -97,14 +94,16 @@ static int _bst_delete_helper(bst_t *bst, int key)
 		bst->root = NULL;
 		return 1;
 	}
-	bst_node_t *sibling = (key <= parent->key) ? parent->right : parent->left;
+
+	bst_node_t *sibling = KEY_CMP(key, parent->key) <= 0 ? parent->right :
+	                                                       parent->left;
 	if (!gparent)                 bst->root = sibling;
-	else if (key <= gparent->key) gparent->left = sibling;
+	else if (KEY_CMP(key, gparent->key) <= 0) gparent->left = sibling;
 	else                          gparent->right = sibling;
 	return 1;
 }
 
-static int _bst_update_helper(bst_t *bst, int key, void *value)
+static int _bst_update_helper(bst_t *bst, map_key_t key, void *value)
 {
 	bst_node_t *gparent, *parent, *leaf;
 
@@ -117,31 +116,33 @@ static int _bst_update_helper(bst_t *bst, int key, void *value)
 	}
 
 	// Key already in the tree. Delete
-	if (leaf->key == key) {
+	if (KEY_CMP(leaf->key, key) == 0) {
 		if (!parent) {
 			bst->root = NULL;
 			return 3;
 		}
-		bst_node_t *sibling = (key <= parent->key) ? parent->right : parent->left;
+
+		bst_node_t *sibling = KEY_CMP(key, parent->key) <= 0 ? parent->right :
+		                                                       parent->left;
 		if (!gparent)                 bst->root = sibling;
-		else if (key <= gparent->key) gparent->left = sibling;
+		else if (KEY_CMP(key, gparent->key) <= 0) gparent->left = sibling;
 		else                          gparent->right = sibling;
 		return 3;
 	}
 
 	// Create new internal and leaf nodes.
 	bst_node_t *new_internal = bst_node_new(key, NULL);
-	if (key <= leaf->key) {
+	if (KEY_CMP(key, leaf->key) <= 0) {
 		new_internal->left = bst_node_new(key, value);
 		new_internal->right = leaf;
 	} else {
 		new_internal->left = leaf;
 		new_internal->right = bst_node_new(key, value);
-		new_internal->key = leaf->key;
+		KEY_COPY(new_internal->key, leaf->key);
 	}
 
 	if (!parent)                 bst->root = new_internal;
-	else if (key <= parent->key) parent->left = new_internal;
+	else if (KEY_CMP(key, parent->key) <= 0) parent->left = new_internal;
 	else                         parent->right = new_internal;
 
 	return 1;
@@ -180,7 +181,7 @@ void map_tdata_add(void *d1, void *d2, void *dst)
 #	endif
 }
 
-int map_lookup(void *map, void *thread_data, int key)
+int map_lookup(void *map, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 
@@ -201,13 +202,13 @@ int map_lookup(void *map, void *thread_data, int key)
 	return ret; 
 }
 
-int map_rquery(void *map, void *tdata, int key1, int key2)
+int map_rquery(void *map, void *tdata, map_key_t key1, map_key_t key2)
 {
 	printf("Range query not yet implemented\n");
 	return 0;
 }
 
-int map_insert(void *map, void *thread_data, int key, void *value)
+int map_insert(void *map, void *thread_data, map_key_t key, void *value)
 {
 	int ret = 0;
 
@@ -228,7 +229,7 @@ int map_insert(void *map, void *thread_data, int key, void *value)
 	return ret;
 }
 
-int map_delete(void *map, void *thread_data, int key)
+int map_delete(void *map, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 
@@ -249,7 +250,7 @@ int map_delete(void *map, void *thread_data, int key)
 	return ret;
 }
 
-int map_update(void *map, void *thread_data, int key, void *value)
+int map_update(void *map, void *thread_data, map_key_t key, void *value)
 {
 	int ret = 0;
 

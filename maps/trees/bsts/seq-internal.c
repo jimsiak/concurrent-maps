@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "../../key/key.h"
+
 #include "bst.h"
 #include "print.h"
 #define BST_INTERNAL
@@ -19,30 +21,28 @@
  * contains `key`. `parent` is either leaf's parent (if `leaf` != NULL) or
  * the node that will be the parent of the inserted node.
  **/
-static inline void _traverse(bst_t *bst, int key, bst_node_t **parent,
-                                                  bst_node_t **leaf)
+static inline void _traverse(bst_t *bst, map_key_t key,
+                             bst_node_t **parent, bst_node_t **leaf)
 {
 	*parent = NULL;
 	*leaf = bst->root;
 
 	while (*leaf) {
-		int leaf_key = (*leaf)->key;
-		if (leaf_key == key)
-			return;
+		if (KEY_CMP((*leaf)->key, key) == 0) return;
 
 		*parent = *leaf;
-		*leaf = (key < leaf_key) ? (*leaf)->left : (*leaf)->right;
+		*leaf = (KEY_CMP(key, (*leaf)->key) < 0) ? (*leaf)->left : (*leaf)->right;
 	}
 }
 
-static int _bst_lookup_helper(bst_t *bst, int key)
+static int _bst_lookup_helper(bst_t *bst, map_key_t key)
 {
 	bst_node_t *parent, *leaf;
 	_traverse(bst, key, &parent, &leaf);
 	return (leaf != NULL);
 }
 
-static int _bst_insert_helper(bst_t *bst, int key, void *value)
+static int _bst_insert_helper(bst_t *bst, map_key_t key, void *value)
 {
 	bst_node_t *parent, *leaf;
 
@@ -57,8 +57,8 @@ static int _bst_insert_helper(bst_t *bst, int key, void *value)
 	// Key already in the tree.
 	if (leaf) return 0;
 
-	if (key < parent->key) parent->left = bst_node_new(key, value);
-	else                   parent->right = bst_node_new(key, value);
+	if (KEY_CMP(key, parent->key) < 0) parent->left = bst_node_new(key, value);
+	else                               parent->right = bst_node_new(key, value);
 
 	return 1;
 }
@@ -75,7 +75,7 @@ static inline void _find_successor(bst_node_t *node, bst_node_t **parent,
 	}
 }
 
-static int _bst_delete_helper(bst_t *bst, int key)
+static int _bst_delete_helper(bst_t *bst, map_key_t key)
 {
 	bst_node_t *parent, *leaf, *succ, *succ_parent;
 
@@ -95,7 +95,7 @@ static int _bst_delete_helper(bst_t *bst, int key)
 	} else { // Leaf has two children.
 		_find_successor(leaf, &succ_parent, &succ);
 
-		leaf->key = succ->key;
+		KEY_COPY(leaf->key, succ->key);
 		if (succ_parent->left == succ) succ_parent->left = succ->right;
 		else succ_parent->right = succ->right;
 	}
@@ -103,7 +103,7 @@ static int _bst_delete_helper(bst_t *bst, int key)
 	return 1;
 }
 
-static int _bst_update_helper(bst_t *bst, int key, void *value)
+static int _bst_update_helper(bst_t *bst, map_key_t key, void *value)
 {
 	bst_node_t *parent, *leaf, *succ, *succ_parent;
 
@@ -117,8 +117,8 @@ static int _bst_update_helper(bst_t *bst, int key, void *value)
 
 	// Insertion
 	if (!leaf) {
-		if (key < parent->key) parent->left = bst_node_new(key, value);
-		else                   parent->right = bst_node_new(key, value);
+		if (KEY_CMP(key, parent->key) < 0) parent->left = bst_node_new(key, value);
+		else                               parent->right = bst_node_new(key, value);
 		return 1;
 	}
 
@@ -133,7 +133,7 @@ static int _bst_update_helper(bst_t *bst, int key, void *value)
 		else if (parent->right == leaf) parent->right = leaf->left;
 	} else { // Leaf has two children.
 		_find_successor(leaf, &succ_parent, &succ);
-		leaf->key = succ->key;
+		KEY_COPY(leaf->key, succ->key);
 		if (succ_parent->left == succ) succ_parent->left = succ->right;
 		else succ_parent->right = succ->right;
 	}
@@ -175,7 +175,7 @@ void map_tdata_add(void *d1, void *d2, void *dst)
 #	endif
 }
 
-int map_lookup(void *map, void *thread_data, int key)
+int map_lookup(void *map, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 
@@ -196,13 +196,13 @@ int map_lookup(void *map, void *thread_data, int key)
 	return ret; 
 }
 
-int map_rquery(void *map, void *tdata, int key1, int key2)
+int map_rquery(void *map, void *tdata, map_key_t key1, map_key_t key2)
 {
 	printf("Range query not yet implemented\n");
 	return 0;
 }
 
-int map_insert(void *map, void *thread_data, int key, void *value)
+int map_insert(void *map, void *thread_data, map_key_t key, void *value)
 {
 	int ret = 0;
 
@@ -223,7 +223,7 @@ int map_insert(void *map, void *thread_data, int key, void *value)
 	return ret;
 }
 
-int map_delete(void *map, void *thread_data, int key)
+int map_delete(void *map, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 
@@ -244,7 +244,7 @@ int map_delete(void *map, void *thread_data, int key)
 	return ret;
 }
 
-int map_update(void *map, void *thread_data, int key, void *value)
+int map_update(void *map, void *thread_data, map_key_t key, void *value)
 {
 	int ret = 0;
 
@@ -268,9 +268,7 @@ int map_update(void *map, void *thread_data, int key, void *value)
 
 int map_validate(void *map)
 {
-	int ret = 0;
-	ret = bst_validate(map);
-	return ret;
+	return bst_validate(map);
 }
 
 char *map_name()

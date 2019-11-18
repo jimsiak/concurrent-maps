@@ -28,7 +28,7 @@ static __thread void *nalloc;
 static bst_node_t *bst_node_new(map_key_t key, void *data)
 {
 	bst_node_t *node = nalloc_alloc_node(nalloc);
-	node->key = key;
+	KEY_COPY(node->key, key);
 	node->data = data;
 	node->right = NULL;
 	node->left = NULL;
