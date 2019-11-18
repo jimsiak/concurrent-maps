@@ -36,6 +36,20 @@ SOURCE_FILES = main.c $(BENCHMARK_FILE) $(NALLOC_FILE)
 
 all: x.btree.seq
 
+## Binary Search Trees (BSTs)
+x.bst.int.seq: $(SOURCE_FILES) maps/trees/bsts/seq-internal.c
+	$(CC) $(CFLAGS) $^ -o $@
+x.bst.int.cg_spin: $(SOURCE_FILES) maps/trees/bsts/seq-internal.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_SPINLOCK
+x.bst.int.cg_htm: $(SOURCE_FILES) maps/trees/bsts/seq-internal.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_HTM
+x.bst.ext.seq: $(SOURCE_FILES) maps/trees/bsts/seq-external.c
+	$(CC) $(CFLAGS) $^ -o $@
+x.bst.ext.cg_spin: $(SOURCE_FILES) maps/trees/bsts/seq-external.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_SPINLOCK
+x.bst.ext.cg_htm: $(SOURCE_FILES) maps/trees/bsts/seq-external.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_HTM
+
 ## B+trees
 x.btree.seq: $(SOURCE_FILES) maps/trees/btrees/seq.c
 	$(CC) $(CFLAGS) $^ -o $@
