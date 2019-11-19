@@ -14,6 +14,21 @@ typedef struct bst_node_s {
 
 	struct bst_node_s *right,
 	                  *left;
+#	ifdef NODE_HAS_PARENT
+	struct bst_node_s *parent;
+#	endif
+
+#	ifdef NODE_HAS_LOCK
+	pthread_spinlock_t lock;
+#	endif
+
+#	ifdef NODE_HAS_VERSION
+	long long version;
+#	endif
+
+#	ifdef NODE_HAS_HEIGHT
+	int height;
+#	endif
 } bst_node_t;
 
 typedef struct {

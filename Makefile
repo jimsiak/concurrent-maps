@@ -51,6 +51,10 @@ x.bst.ext.cg_spin: $(SOURCE_FILES) maps/trees/bsts/seq-external.c
 x.bst.ext.cg_htm: $(SOURCE_FILES) maps/trees/bsts/seq-external.c
 	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_HTM
 
+### AVL BSTs
+x.bst.avl.bronson: $(SOURCE_FILES) maps/trees/bsts/avl/bronson.c
+	$(CC) $(CFLAGS) $^ -o $@
+
 ## B+trees
 x.btree.seq: $(SOURCE_FILES) maps/trees/btrees/seq.c
 	$(CC) $(CFLAGS) $^ -o $@
