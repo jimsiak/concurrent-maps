@@ -54,6 +54,8 @@ x.bst.ext.cg_htm: $(SOURCE_FILES) maps/trees/bsts/seq-external.c
 ### AVL BSTs
 x.bst.avl.bronson: $(SOURCE_FILES) maps/trees/bsts/avl/bronson.c
 	$(CC) $(CFLAGS) $^ -o $@
+x.bst.avl.ext.rcu_htm: $(SOURCE_FILES) ./maps/trees/bsts/avl/rcu-htm-external.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 ## B+trees
 x.btree.seq: $(SOURCE_FILES) maps/trees/btrees/seq.c
