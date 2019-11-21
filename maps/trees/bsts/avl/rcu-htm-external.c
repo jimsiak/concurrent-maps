@@ -14,7 +14,7 @@
 #define BST_EXTERNAL
 #define SYNC_RCU_HTM
 #include "../../../map.h"
-#include "rcu_htm_tdata.h"
+#include "../../../rcu-htm/tdata.h"
 #include "validate.h"
 #include "print.h"
 
