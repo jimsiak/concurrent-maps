@@ -26,7 +26,7 @@ typedef struct btree_node_s {
 #	ifdef HIGHKEY_PER_NODE
 	map_key_t highkey;
 #	endif
-} __attribute__((packed)) btree_node_t;
+} btree_node_t;
 
 typedef struct {
 	btree_node_t *root;
