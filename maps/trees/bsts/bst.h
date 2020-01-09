@@ -3,6 +3,7 @@
 
 #if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM) || defined(SYNC_RCU_HTM)
 #include <pthread.h> //> pthread_spinlock_t
+#include <string.h>  //> memcpy()
 #endif
 #include "../../key/key.h"
 #include "../../map.h"
@@ -47,6 +48,13 @@ static bst_node_t *bst_node_new(map_key_t key, void *data)
 	node->data = data;
 	node->right = NULL;
 	node->left = NULL;
+	return node;
+}
+
+static bst_node_t *bst_node_new_copy(bst_node_t *src)
+{
+	bst_node_t *node = nalloc_alloc_node(nalloc);
+	memcpy(node, src, sizeof(*node));
 	return node;
 }
 
