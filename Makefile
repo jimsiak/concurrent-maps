@@ -21,10 +21,11 @@ WORKLOAD_FLAG = -DWORKLOAD_TIME
 CFLAGS += $(WORKLOAD_FLAG)
 
 ## What type of keys for the map data structures?
+## Possible values: MAP_KEY_TYPE_INT, MAP_KEY_TYPE_BIG_INT, MAP_KEY_TYPE_STR
 MAP_KEY_TYPE ?= MAP_KEY_TYPE_INT
-#MAP_KEY_TYPE = MAP_KEY_TYPE_STR
+BIG_INT_KEY_SZ ?= 50
 STR_KEY_SZ ?= 50
-CFLAGS += -D$(MAP_KEY_TYPE) -DSTR_KEY_SZ=$(STR_KEY_SZ)
+CFLAGS += -D$(MAP_KEY_TYPE) -DSTR_KEY_SZ=$(STR_KEY_SZ) -DBIG_INT_KEY_SZ=$(BIG_INT_KEY_SZ)
 
 INC_FLAGS = -Ilib/
 CFLAGS += $(INC_FLAGS)
@@ -67,6 +68,16 @@ x.btree.cg_htm: $(SOURCE_FILES) maps/trees/btrees/seq.c
 x.btree.rcu_htm: $(SOURCE_FILES) maps/trees/btrees/rcu-htm.c
 	$(CC) $(CFLAGS) $^ -o $@
 x.btree.blink_locks: $(SOURCE_FILES) maps/trees/btrees/blink-lock.c
+	$(CC) $(CFLAGS) $^ -o $@
+
+### (a-b)-trees
+x.abtree.seq: $(SOURCE_FILES) maps/trees/btrees/abtrees/seq.c
+	$(CC) $(CFLAGS) $^ -o $@
+x.abtree.cg_htm: $(SOURCE_FILES) maps/trees/btrees/abtrees/seq.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_HTM
+x.abtree.cg_spin: $(SOURCE_FILES) maps/trees/btrees/abtrees/seq.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_SPINLOCK
+x.abtree.rcu_htm: $(SOURCE_FILES) maps/trees/btrees/abtrees/rcu-htm.c
 	$(CC) $(CFLAGS) $^ -o $@
 
 ## Treaps

@@ -3,6 +3,8 @@
 
 #if defined(MAP_KEY_TYPE_INT)
 #	include "key_int.h"
+#elif defined (MAP_KEY_TYPE_BIG_INT)
+#	include "key_big_int.h"
 #elif defined (MAP_KEY_TYPE_STR)
 #	ifndef STR_KEY_SZ
 #		define STR_KEY_SZ 50
