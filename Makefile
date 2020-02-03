@@ -90,6 +90,19 @@ x.treap.cg_spin: $(SOURCE_FILES) maps/trees/treaps/seq.c
 x.treap.cg_htm: $(SOURCE_FILES) maps/trees/treaps/seq.c
 	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_HTM
 
+## Skiplists
+x.skiplist.seq: $(SOURCE_FILES) maps/skiplist/seq.c
+	$(CC) $(CFLAGS) $^ -o $@
+x.skiplist.cg_spin: $(SOURCE_FILES) maps/skiplist/seq.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_SPINLOCK
+x.skiplist.cg_htm: $(SOURCE_FILES) maps/skiplist/seq.c
+	$(CC) $(CFLAGS) $^ -o $@ -DSYNC_CG_HTM
+
+x.skiplist.herlihy: $(SOURCE_FILES) maps/skiplist/herlihy.c
+	$(CC) $(CFLAGS) $^ -o $@
+x.skiplist.pugh: $(SOURCE_FILES) maps/skiplist/pugh.c
+	$(CC) $(CFLAGS) $^ -o $@
+
 ## Contention-adaptive generic scheme
 x.treap.ca_locks: $(SOURCE_FILES) maps/contention-adaptive/ca-locks.c
 	$(CC) $(CFLAGS) $^ -o $@ -DSEQ_DS_TYPE_TREAP
