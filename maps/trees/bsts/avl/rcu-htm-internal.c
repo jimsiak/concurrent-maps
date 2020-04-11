@@ -22,10 +22,10 @@
 
 static __thread void *nalloc;
 
-static avl_node_t *avl_node_new(int key, void *data)
+static avl_node_t *avl_node_new(map_key_t key, void *data)
 {
 	avl_node_t *node = nalloc_alloc_node(nalloc);
-	node->key = key;
+	KEY_COPY(node->key, key);
 	node->data = data;
 	node->height = 0; // new nodes have height 0 and NULL has height -1.
 	node->right = node->left = NULL;
@@ -34,7 +34,7 @@ static avl_node_t *avl_node_new(int key, void *data)
 
 static void avl_node_copy(avl_node_t *dest, avl_node_t *src)
 {
-	dest->key = src->key;
+	KEY_COPY(dest->key, src->key);
 	dest->data = src->data;
 	dest->height = src->height;
 	dest->left = src->left;
@@ -99,24 +99,25 @@ static inline avl_node_t *rotate_left(avl_node_t *node)
  * the node that will be the parent of the inserted node.
  * In the case of an empty tree both `parent` and `leaf` are NULL.
  **/
-static inline void _traverse(avl_t *avl, int key, avl_node_t **parent,
-                                                  avl_node_t **leaf, int *hops)
+static inline void _traverse(avl_t *avl, map_key_t key,
+                             avl_node_t **parent, avl_node_t **leaf, int *hops)
 {
 	*parent = NULL;
 	*leaf = avl->root;
 	*hops = 0;
 
 	while (*leaf) {
-		int leaf_key = (*leaf)->key;
-		if (leaf_key == key)
+		map_key_t leaf_key;
+		KEY_COPY(leaf_key, (*leaf)->key);
+		if (KEY_CMP(leaf_key, key) == 0)
 			return;
 
 		*parent = *leaf;
-		*leaf = (key < leaf_key) ? (*leaf)->left : (*leaf)->right;
+		*leaf = (KEY_CMP(key, leaf_key) < 0) ? (*leaf)->left : (*leaf)->right;
 		(*hops)++;
 	}
 }
-static inline void _traverse_with_stack(avl_t *avl, int key,
+static inline void _traverse_with_stack(avl_t *avl, map_key_t key,
                                         avl_node_t *node_stack[MAX_HEIGHT],
                                         int *stack_top)
 {
@@ -129,16 +130,17 @@ static inline void _traverse_with_stack(avl_t *avl, int key,
 	while (leaf) {
 		node_stack[++(*stack_top)] = leaf;
 
-		int leaf_key = leaf->key;
-		if (leaf_key == key)
+		map_key_t leaf_key;
+		KEY_COPY(leaf_key, leaf->key);
+		if (KEY_CMP(leaf_key, key) == 0)
 			return;
 
 		parent = leaf;
-		leaf = (key < leaf_key) ? leaf->left : leaf->right;
+		leaf = (KEY_CMP(key, leaf_key) < 0) ? leaf->left : leaf->right;
 	}
 }
 
-static int _avl_lookup_helper(avl_t *avl, int key, int *hops)
+static int _avl_lookup_helper(avl_t *avl, map_key_t key, int *hops)
 {
 	avl_node_t *parent, *leaf;
 
@@ -146,7 +148,7 @@ static int _avl_lookup_helper(avl_t *avl, int key, int *hops)
 	return (leaf != NULL);
 }
 
-static inline void _avl_insert_fixup(avl_t *avl, int key,
+static inline void _avl_insert_fixup(avl_t *avl, map_key_t key,
                                      avl_node_t *node_stack[MAX_HEIGHT],
                                      int top)
 {
@@ -164,12 +166,12 @@ static inline void _avl_insert_fixup(avl_t *avl, int key,
 
 			if (balance2 == 1) { // LEFT-LEFT case
 				if (!parent)                avl->root = rotate_right(curr);
-				else if (key < parent->key) parent->left = rotate_right(curr);
+				else if (KEY_CMP(key, parent->key) < 0) parent->left = rotate_right(curr);
 				else                        parent->right = rotate_right(curr);
 			} else if (balance2 == -1) { // LEFT-RIGHT case
 				curr->left = rotate_left(curr->left);
 				if (!parent)                avl->root = rotate_right(curr); 
-				else if (key < parent->key) parent->left = rotate_right(curr);
+				else if (KEY_CMP(key, parent->key) < 0) parent->left = rotate_right(curr);
 				else                        parent->right = rotate_right(curr);
 			} else {
 				assert(0);
@@ -181,12 +183,12 @@ static inline void _avl_insert_fixup(avl_t *avl, int key,
 
 			if (balance2 == -1) { // RIGHT-RIGHT case
 				if (!parent)                avl->root = rotate_left(curr);
-				else if (key < parent->key) parent->left = rotate_left(curr);
+				else if (KEY_CMP(key, parent->key) < 0) parent->left = rotate_left(curr);
 				else                        parent->right = rotate_left(curr);
 			} else if (balance2 == 1) { // RIGHT-LEFT case
 				curr->right = rotate_right(curr->right);
 				if (!parent)                avl->root = rotate_left(curr);
-				else if (key < parent->key) parent->left = rotate_left(curr);
+				else if (KEY_CMP(key, parent->key) < 0) parent->left = rotate_left(curr);
 				else                        parent->right = rotate_left(curr);
 			} else {
 				assert(0);
@@ -204,7 +206,7 @@ static inline void _avl_insert_fixup(avl_t *avl, int key,
 	}
 }
 
-static avl_node_t *_insert_and_rebalance_with_copy(int key, void *value,
+static avl_node_t *_insert_and_rebalance_with_copy(map_key_t key, void *value,
         avl_node_t *node_stack[MAX_HEIGHT], int stack_top, tdata_t *tdata,
         avl_node_t **tree_copy_root_ret, int *connection_point_stack_index,
         avl_node_t *nodes_to_free[MAX_HEIGHT], int *ntf_top,
@@ -244,7 +246,7 @@ static avl_node_t *_insert_and_rebalance_with_copy(int key, void *value,
 		ht_insert(tdata->ht, &connection_point->right, curr_cp->right);
 
 		curr_cp->height = tree_copy_root->height + 1;
-		if (key < curr_cp->key) curr_cp->left = tree_copy_root;
+		if (KEY_CMP(key, curr_cp->key) < 0) curr_cp->left = tree_copy_root;
 		else                    curr_cp->right = tree_copy_root;
 		tree_copy_root = curr_cp;
 
@@ -255,7 +257,7 @@ static avl_node_t *_insert_and_rebalance_with_copy(int key, void *value,
 		// Get current node's balance
 		avl_node_t *sibling;
 		int curr_balance;
-		if (key < curr_cp->key) {
+		if (KEY_CMP(key, curr_cp->key) < 0) {
 			sibling = curr_cp->right;
 			curr_balance = node_height(curr_cp->left) - node_height(sibling);
 		} else {
@@ -296,7 +298,7 @@ static avl_node_t *_insert_and_rebalance_with_copy(int key, void *value,
 	return connection_point;
 }
 
-static int _avl_insert_helper(avl_t *avl, int key, void *value, tdata_t *tdata)
+static int _avl_insert_helper(avl_t *avl, map_key_t key, void *value, tdata_t *tdata)
 {
 	avl_node_t *nodes_to_free[MAX_HEIGHT], *nodes_alloced[MAX_HEIGHT];
 	int ntf_top, nalloced_top;
@@ -316,7 +318,7 @@ try_from_scratch:
 		tdata->lacqs++;
 		pthread_spin_lock(&avl->lock);
 		_traverse_with_stack(avl, key, node_stack, &stack_top);
-		if (stack_top >= 0 && node_stack[stack_top]->key == key) {
+		if (stack_top >= 0 && KEY_CMP(node_stack[stack_top]->key, key) == 0) {
 			pthread_spin_unlock(&avl->lock);
 			return 0;
 		}
@@ -330,7 +332,7 @@ try_from_scratch:
 		if (!connection_point) {
 			avl->root = tree_copy_root;
 		} else {
-			if (key <= connection_point->key)
+			if (KEY_CMP(key, connection_point->key) <= 0)
 				connection_point->left = tree_copy_root;
 			else
 				connection_point->right = tree_copy_root;
@@ -341,7 +343,7 @@ try_from_scratch:
 
 	/* Asynchronized traversal. If key is there we can safely return. */
 	_traverse_with_stack(avl, key, node_stack, &stack_top);
-	if (stack_top >= 0 && node_stack[stack_top]->key == key) {
+	if (stack_top >= 0 && KEY_CMP(node_stack[stack_top]->key, key) == 0) {
 		return 0;
 	}
 
@@ -374,16 +376,16 @@ validate_and_connect_copy:
 			TX_ABORT(ABORT_GL_TAKEN);
 
 		// Validate copy
-		if (key < node_stack[stack_top]->key && node_stack[stack_top]->left != NULL)
+		if (KEY_CMP(key, node_stack[stack_top]->key) < 0 && node_stack[stack_top]->left != NULL)
 			TX_ABORT(ABORT_VALIDATION_FAILURE);
-		if (key > node_stack[stack_top]->key && node_stack[stack_top]->right != NULL)
+		if (KEY_CMP(key, node_stack[stack_top]->key) > 0 && node_stack[stack_top]->right != NULL)
 			TX_ABORT(ABORT_VALIDATION_FAILURE);
 		if (avl->root != node_stack[0])
 			TX_ABORT(ABORT_VALIDATION_FAILURE);
 
 		if (connection_point_stack_index <= 0) {
 			for (i=0; i < stack_top; i++) {
-				if (key <= node_stack[i]->key) {
+				if (KEY_CMP(key, node_stack[i]->key) <= 0) {
 					if (node_stack[i]->left != node_stack[i+1])
 						TX_ABORT(ABORT_VALIDATION_FAILURE);
 				} else {
@@ -394,11 +396,11 @@ validate_and_connect_copy:
 		} else {
 			avl_node_t *curr = avl->root;
 			while (curr && curr != connection_point)
-				curr = (key <= curr->key) ? curr->left : curr->right;
+				curr = (KEY_CMP(key, curr->key) <= 0) ? curr->left : curr->right;
 			if (curr != connection_point)
 				TX_ABORT(ABORT_VALIDATION_FAILURE);
 			for (i=connection_point_stack_index; i < stack_top; i++) {
-				if (key <= node_stack[i]->key) {
+				if (KEY_CMP(key, node_stack[i]->key) <= 0) {
 					if (node_stack[i]->left != node_stack[i+1])
 						TX_ABORT(ABORT_VALIDATION_FAILURE);
 				} else {
@@ -423,7 +425,7 @@ validate_and_connect_copy:
 		if (!connection_point) {
 			avl->root = tree_copy_root;
 		} else {
-			if (key <= connection_point->key)
+			if (KEY_CMP(key, connection_point->key) <= 0)
 				connection_point->left = tree_copy_root;
 			else
 				connection_point->right = tree_copy_root;
@@ -469,7 +471,7 @@ static inline void _find_successor_with_stack(avl_node_t *node,
 	ht_insert(tdata->ht, &leaf->left, NULL);
 }
 
-static avl_node_t *_delete_and_rebalance_with_copy(int key,
+static avl_node_t *_delete_and_rebalance_with_copy(map_key_t key,
                        avl_node_t *node_stack[MAX_HEIGHT], int stack_top,
                        tdata_t *tdata, avl_node_t **tree_copy_root_ret,
                        int *connection_point_stack_index, int *new_stack_top,
@@ -505,7 +507,7 @@ static avl_node_t *_delete_and_rebalance_with_copy(int key,
 
 		avl_node_t *sibling;
 		int curr_balance;
-		if (key < connection_point->key) {
+		if (KEY_CMP(key, connection_point->key) < 0) {
 			sibling = connection_point->right;
 			ht_insert(tdata->ht, &connection_point->right, sibling);
 			curr_balance = node_height(tree_copy_root) - node_height(sibling);
@@ -524,11 +526,11 @@ static avl_node_t *_delete_and_rebalance_with_copy(int key,
 			ht_insert(tdata->ht, &connection_point->right, curr_cp->right);
 			curr_cp->left = sibling;
 
-			if (key < curr_cp->key) curr_cp->left = tree_copy_root;
+			if (KEY_CMP(key, curr_cp->key) < 0) curr_cp->left = tree_copy_root;
 			else                    curr_cp->right = tree_copy_root;
 			tree_copy_root = curr_cp;
 			if (connection_point == original_to_be_deleted)
-				tree_copy_root->key = to_be_deleted->key;
+				KEY_COPY(tree_copy_root->key, to_be_deleted->key);
 			curr_cp = avl_node_new_copy(tree_copy_root->left, tdata);
 			nodes_to_free[++(*ntf_top)] = tree_copy_root->left;
 			nodes_alloced[++(*nalloced_top)] = curr_cp;
@@ -566,11 +568,11 @@ static avl_node_t *_delete_and_rebalance_with_copy(int key,
 			ht_insert(tdata->ht, &connection_point->right, curr_cp->right);
 			curr_cp->right = sibling;
 
-			if (key < curr_cp->key) curr_cp->left = tree_copy_root;
+			if (KEY_CMP(key, curr_cp->key) < 0) curr_cp->left = tree_copy_root;
 			else                    curr_cp->right = tree_copy_root;
 			tree_copy_root = curr_cp;
 			if (connection_point == original_to_be_deleted)
-				tree_copy_root->key = to_be_deleted->key;
+				KEY_COPY(tree_copy_root->key, to_be_deleted->key);
 			curr_cp = avl_node_new_copy(tree_copy_root->right, tdata);
 			nodes_to_free[++(*ntf_top)] = tree_copy_root->right;
 			nodes_alloced[++(*nalloced_top)] = curr_cp;
@@ -611,19 +613,19 @@ static avl_node_t *_delete_and_rebalance_with_copy(int key,
 		avl_node_t *curr_cp = avl_node_new_copy(connection_point, tdata);
 		nodes_to_free[++(*ntf_top)] = connection_point;
 		nodes_alloced[++(*nalloced_top)] = curr_cp;
-		if (key < curr_cp->key) curr_cp->right = sibling;
-		else                    curr_cp->left = sibling;
+		if (KEY_CMP(key, curr_cp->key) < 0) curr_cp->right = sibling;
+		else                                curr_cp->left = sibling;
 
 		ht_insert(tdata->ht, &connection_point->left, curr_cp->left);
 		ht_insert(tdata->ht, &connection_point->right, curr_cp->right);
 
 		// Change the height of current node's copy + the key if needed.
 		curr_cp->height = new_height;
-		if (key < curr_cp->key) curr_cp->left = tree_copy_root;
-		else                    curr_cp->right = tree_copy_root;
+		if (KEY_CMP(key, curr_cp->key) < 0) curr_cp->left = tree_copy_root;
+		else                                curr_cp->right = tree_copy_root;
 		tree_copy_root = curr_cp;
 		if (connection_point == original_to_be_deleted)
-			tree_copy_root->key = to_be_deleted->key;
+			KEY_COPY(tree_copy_root->key, to_be_deleted->key);
 
 		// Move one level up
 		*connection_point_stack_index = stack_top;
@@ -642,11 +644,11 @@ static avl_node_t *_delete_and_rebalance_with_copy(int key,
 			ht_insert(tdata->ht, &node_stack[i]->left, curr_cp->left);
 			ht_insert(tdata->ht, &node_stack[i]->right, curr_cp->right);
 
-			if (key < curr_cp->key) curr_cp->left = tree_copy_root;
-			else                    curr_cp->right = tree_copy_root;
+			if (KEY_CMP(key, curr_cp->key) < 0) curr_cp->left = tree_copy_root;
+			else                                curr_cp->right = tree_copy_root;
 			tree_copy_root = curr_cp;
 		}
-		tree_copy_root->key = to_be_deleted->key;
+		KEY_COPY(tree_copy_root->key, to_be_deleted->key);
 		connection_point = to_be_deleted_stack_index > 0 ? 
 		                             node_stack[to_be_deleted_stack_index - 1] :
 		                             NULL;
@@ -657,7 +659,7 @@ static avl_node_t *_delete_and_rebalance_with_copy(int key,
 	return connection_point;
 }
 
-static int _avl_delete_helper(avl_t *avl, int key, tdata_t *tdata)
+static int _avl_delete_helper(avl_t *avl, map_key_t key, tdata_t *tdata)
 {
 	avl_node_t *nodes_to_free[MAX_HEIGHT], *nodes_alloced[MAX_HEIGHT];
 	int ntf_top, nalloced_top;
@@ -678,7 +680,7 @@ try_from_scratch:
 		tdata->lacqs++;
 		pthread_spin_lock(&avl->lock);
 		_traverse_with_stack(avl, key, node_stack, &stack_top);
-		if (stack_top < 0 || node_stack[stack_top]->key != key) {
+		if (stack_top < 0 || KEY_CMP(node_stack[stack_top]->key, key) != 0) {
 			pthread_spin_unlock(&avl->lock);
 			return 0;
 		}
@@ -692,7 +694,7 @@ try_from_scratch:
 		if (!connection_point) {
 			avl->root = tree_copy_root;
 		} else {
-			if (key <= connection_point->key)
+			if (KEY_CMP(key, connection_point->key) <= 0)
 				connection_point->left = tree_copy_root;
 			else
 				connection_point->right = tree_copy_root;
@@ -704,7 +706,7 @@ try_from_scratch:
 
 	/* Asynchronized traversal. If key is not there we can safely return. */
 	_traverse_with_stack(avl, key, node_stack, &stack_top);
-	if (stack_top < 0 || node_stack[stack_top]->key != key) {
+	if (stack_top < 0 || KEY_CMP(node_stack[stack_top]->key, key) != 0) {
 		return 0;
 	}
 
@@ -741,7 +743,7 @@ validate_and_connect_copy:
 
 		if (connection_point_stack_index <= 0) {
 			for (i=0; i < stack_top; i++) {
-				if (key < node_stack[i]->key) {
+				if (KEY_CMP(key, node_stack[i]->key) < 0) {
 					if (node_stack[i]->left != node_stack[i+1])
 						TX_ABORT(ABORT_VALIDATION_FAILURE);
 				} else {
@@ -752,11 +754,11 @@ validate_and_connect_copy:
 		} else {
 			avl_node_t *curr = avl->root;
 			while (curr && curr != connection_point)
-				curr = (key <= curr->key) ? curr->left : curr->right;
+				curr = (KEY_CMP(key, curr->key) <= 0) ? curr->left : curr->right;
 			if (curr != connection_point)
 				TX_ABORT(ABORT_VALIDATION_FAILURE);
 			for (i=connection_point_stack_index; i < stack_top; i++) {
-				if (key < node_stack[i]->key) {
+				if (KEY_CMP(key, node_stack[i]->key) < 0) {
 					if (node_stack[i]->left != node_stack[i+1])
 						TX_ABORT(ABORT_VALIDATION_FAILURE);
 				} else {
@@ -780,7 +782,7 @@ validate_and_connect_copy:
 		if (!connection_point) {
 			avl->root = tree_copy_root;
 		} else {
-			if (key <= connection_point->key)
+			if (KEY_CMP(key, connection_point->key) <= 0)
 				connection_point->left = tree_copy_root;
 			else
 				connection_point->right = tree_copy_root;
@@ -801,7 +803,7 @@ validate_and_connect_copy:
 	return 1;
 }
 
-static int _avl_update_helper(avl_t *avl, int key, void *value, tdata_t *tdata)
+static int _avl_update_helper(avl_t *avl, map_key_t key, void *value, tdata_t *tdata)
 {
 	avl_node_t *nodes_to_free[MAX_HEIGHT], *nodes_alloced[MAX_HEIGHT];
 	int ntf_top, nalloced_top;
@@ -823,15 +825,15 @@ try_from_scratch:
 		pthread_spin_lock(&avl->lock);
 		_traverse_with_stack(avl, key, node_stack, &stack_top);
 		if (op_is_insert == -1) {
-			if (stack_top < 0)                          op_is_insert = 1;
-			else if (node_stack[stack_top]->key == key) op_is_insert = 0;
-			else                                        op_is_insert = 1;
+			if (stack_top < 0)                                      op_is_insert = 1;
+			else if (KEY_CMP(node_stack[stack_top]->key, key) == 0) op_is_insert = 0;
+			else                                                    op_is_insert = 1;
 		}
 
-		if (op_is_insert && stack_top >= 0 && node_stack[stack_top]->key == key) {
+		if (op_is_insert && stack_top >= 0 && KEY_CMP(node_stack[stack_top]->key, key) == 0) {
 			pthread_spin_unlock(&avl->lock);
 			return 0;
-		} else if (!op_is_insert && (stack_top < 0 || node_stack[stack_top]->key != key)) {
+		} else if (!op_is_insert && (stack_top < 0 || KEY_CMP(node_stack[stack_top]->key, key) != 0)) {
 			pthread_spin_unlock(&avl->lock);
 			return 2;
 		}
@@ -856,7 +858,7 @@ try_from_scratch:
 		if (!connection_point) {
 			avl->root = tree_copy_root;
 		} else {
-			if (key <= connection_point->key)
+			if (KEY_CMP(key, connection_point->key) <= 0)
 				connection_point->left = tree_copy_root;
 			else
 				connection_point->right = tree_copy_root;
@@ -868,13 +870,13 @@ try_from_scratch:
 	/* Asynchronized traversal. If key is there we can safely return. */
 	_traverse_with_stack(avl, key, node_stack, &stack_top);
 	if (op_is_insert == -1) {
-		if (stack_top < 0)                          op_is_insert = 0;
-		else if (node_stack[stack_top]->key == key) op_is_insert = 0;
-		else                                        op_is_insert = 1;
+		if (stack_top < 0)                                      op_is_insert = 0;
+		else if (KEY_CMP(node_stack[stack_top]->key, key) == 0) op_is_insert = 0;
+		else                                                    op_is_insert = 1;
 	}
-	if (op_is_insert && stack_top >= 0 && node_stack[stack_top]->key == key) {
+	if (op_is_insert && stack_top >= 0 && KEY_CMP(node_stack[stack_top]->key, key) == 0) {
 		return 0;
-	} else if (!op_is_insert && (stack_top < 0 || node_stack[stack_top]->key != key)) {
+	} else if (!op_is_insert && (stack_top < 0 || KEY_CMP(node_stack[stack_top]->key, key) != 0)) {
 		return 2;
 	}
 
@@ -920,9 +922,9 @@ validate_and_connect_copy:
 
 		// Validate copy
 		if (op_is_insert) {
-			if (key < node_stack[stack_top]->key && node_stack[stack_top]->left != NULL)
+			if (KEY_CMP(key, node_stack[stack_top]->key) < 0 && node_stack[stack_top]->left != NULL)
 				TX_ABORT(ABORT_VALIDATION_FAILURE);
-			if (key > node_stack[stack_top]->key && node_stack[stack_top]->right != NULL)
+			if (KEY_CMP(key, node_stack[stack_top]->key) > 0 && node_stack[stack_top]->right != NULL)
 				TX_ABORT(ABORT_VALIDATION_FAILURE);
 		} else {
 			if (node_stack[stack_top]->left != NULL && node_stack[stack_top]->right != NULL)
@@ -933,8 +935,8 @@ validate_and_connect_copy:
 	
 		if (connection_point_stack_index <= 0) {
 			for (i=0; i < stack_top; i++) {
-				if ((op_is_insert && key <= node_stack[i]->key) ||
-				    (!op_is_insert && key < node_stack[i]->key)) {
+				if ((op_is_insert && KEY_CMP(key, node_stack[i]->key) <= 0) ||
+				    (!op_is_insert && KEY_CMP(key, node_stack[i]->key) < 0)) {
 					if (node_stack[i]->left != node_stack[i+1])
 						TX_ABORT(ABORT_VALIDATION_FAILURE);
 				} else {
@@ -945,12 +947,12 @@ validate_and_connect_copy:
 		} else {
 			avl_node_t *curr = avl->root;
 			while (curr && curr != connection_point)
-				curr = (key <= curr->key) ? curr->left : curr->right;
+				curr = (KEY_CMP(key, curr->key) <= 0) ? curr->left : curr->right;
 			if (curr != connection_point)
 				TX_ABORT(ABORT_VALIDATION_FAILURE);
 			for (i=connection_point_stack_index; i < stack_top; i++) {
-				if ((op_is_insert && key <= node_stack[i]->key) ||
-				    (!op_is_insert && key < node_stack[i]->key)) {
+				if ((op_is_insert && KEY_CMP(key, node_stack[i]->key) <= 0) ||
+				    (!op_is_insert && KEY_CMP(key, node_stack[i]->key) < 0)) {
 					if (node_stack[i]->left != node_stack[i+1])
 						TX_ABORT(ABORT_VALIDATION_FAILURE);
 				} else {
@@ -974,7 +976,7 @@ validate_and_connect_copy:
 		if (!connection_point) {
 			avl->root = tree_copy_root;
 		} else {
-			if (key <= connection_point->key)
+			if (KEY_CMP(key, connection_point->key) <= 0)
 				connection_point->left = tree_copy_root;
 			else
 				connection_point->right = tree_copy_root;
@@ -1023,7 +1025,7 @@ void map_tdata_add(void *d1, void *d2, void *dst)
 	tdata_add(d1, d2, dst);
 }
 
-int map_lookup(void *map, void *thread_data, int key)
+int map_lookup(void *map, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 	int hops = 0;
@@ -1037,21 +1039,21 @@ int map_rquery(void *map, void *tdata, map_key_t key1, map_key_t key2)
 	return 0;
 }
 
-int map_insert(void *map, void *tdata, int key, void *value)
+int map_insert(void *map, void *tdata, map_key_t key, void *value)
 {
 	int ret = 0;
 	ret = _avl_insert_helper(map, key, value, tdata);
 	return ret;
 }
 
-int map_delete(void *map, void *tdata, int key)
+int map_delete(void *map, void *tdata, map_key_t key)
 {
 	int ret = 0;
 	ret = _avl_delete_helper(map, key, tdata);
 	return ret;
 }
 
-int map_update(void *map, void *tdata, int key, void *value)
+int map_update(void *map, void *tdata, map_key_t key, void *value)
 {
 	int ret = 0;
 	ret = _avl_update_helper(map, key, value, tdata);
