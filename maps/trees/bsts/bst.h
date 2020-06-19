@@ -3,8 +3,8 @@
 
 #if defined(SYNC_CG_SPINLOCK) || defined(SYNC_CG_HTM) || defined(SYNC_RCU_HTM)
 #include <pthread.h> //> pthread_spinlock_t
-#include <string.h>  //> memcpy()
 #endif
+#include <string.h>  //> memcpy()
 #include "../../key/key.h"
 #include "../../map.h"
 #include "alloc.h"
@@ -15,6 +15,7 @@ typedef struct bst_node_s {
 
 	struct bst_node_s *right,
 	                  *left;
+
 #	ifdef NODE_HAS_PARENT
 	struct bst_node_s *parent;
 #	endif
@@ -30,6 +31,14 @@ typedef struct bst_node_s {
 #	ifdef NODE_HAS_HEIGHT
 	int height;
 #	endif
+
+#	ifdef NODE_HAS_UPDATE
+	info_t *update;
+#	endif
+
+#	ifdef NODE_HAS_ISLEAF
+	char isleaf;
+#	endif
 } bst_node_t;
 
 typedef struct {
@@ -41,13 +50,19 @@ typedef struct {
 
 static __thread void *nalloc;
 
+#ifdef NODE_HAS_ISLEAF
+static bst_node_t *bst_node_new(map_key_t key, void *data, char isleaf)
+#else
 static bst_node_t *bst_node_new(map_key_t key, void *data)
+#endif
 {
 	bst_node_t *node = nalloc_alloc_node(nalloc);
+	memset(node, 0, sizeof(*node));
 	KEY_COPY(node->key, key);
 	node->data = data;
-	node->right = NULL;
-	node->left = NULL;
+#ifdef NODE_HAS_ISLEAF
+	node->isleaf = isleaf;
+#endif
 	return node;
 }
 

@@ -7,6 +7,7 @@
  * The following definitions can be used:
  *   - BST_INTERNAL
  *   - BST_EXTERNAL
+ *   - BST_ELLEN -> to avoid validating the three dummy nodes with infinite value
  **/
 #if !defined(BST_INTERNAL) && !defined(BST_EXTERNAL)
 #	error "Tree type should be defined"
@@ -62,7 +63,12 @@ static int bst_validate(bst_t *bst)
 	total_nodes = 0;
 	bst_violations = 0;
 
+#	ifdef BST_ELLEN
+	printf("SKATA\n");
+	_bst_validate_rec(bst->root->right->right, 0);
+#	else
 	_bst_validate_rec(bst->root, 0);
+#	endif
 
 	check_bst = (bst_violations == 0);
 
