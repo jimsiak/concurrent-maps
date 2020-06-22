@@ -22,16 +22,6 @@
 
 static __thread void *nalloc;
 
-static avl_node_t *avl_node_new(map_key_t key, void *data)
-{
-	avl_node_t *node = nalloc_alloc_node(nalloc);
-	KEY_COPY(node->key, key);
-	node->data = data;
-	node->height = 0; // new nodes have height 0 and NULL has height -1.
-	node->right = node->left = NULL;
-	return node;
-}
-
 static void avl_node_copy(avl_node_t *dest, avl_node_t *src)
 {
 	KEY_COPY(dest->key, src->key);

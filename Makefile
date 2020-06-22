@@ -59,6 +59,8 @@ x.bst.ext.ellen: $(SOURCE_FILES) maps/trees/bsts/ellen.c
 ### AVL BSTs
 x.bst.avl.bronson: $(SOURCE_FILES) maps/trees/bsts/avl/bronson.c
 	$(CC) $(CFLAGS) $^ -o $@
+x.bst.avl.drachsler: $(SOURCE_FILES) maps/trees/bsts/avl/drachsler.c
+	$(CC) $(CFLAGS) $^ -o $@
 x.bst.avl.int.rcu_htm: $(SOURCE_FILES) ./maps/trees/bsts/avl/rcu-htm-internal.c
 	$(CC) $(CFLAGS) $^ -o $@
 x.bst.avl.ext.rcu_htm: $(SOURCE_FILES) ./maps/trees/bsts/avl/rcu-htm-external.c

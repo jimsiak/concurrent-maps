@@ -39,6 +39,18 @@ typedef struct bst_node_s {
 #	ifdef NODE_HAS_ISLEAF
 	char isleaf;
 #	endif
+
+#	ifdef NODE_HAS_SUCC_AND_PRED
+	struct bst_node_s *succ, *pred;
+#	endif
+
+#	ifdef NODE_HAS_TREE_AND_SUCC_LOCKS
+	lock_t tree_lock, succ_lock;
+#	endif
+
+#	ifdef NODE_HAS_LR_HEIGHTS
+	short int lheight, rheight;
+#	endif
 } bst_node_t;
 
 typedef struct {
@@ -60,9 +72,20 @@ static bst_node_t *bst_node_new(map_key_t key, void *data)
 	memset(node, 0, sizeof(*node));
 	KEY_COPY(node->key, key);
 	node->data = data;
+
 #ifdef NODE_HAS_ISLEAF
 	node->isleaf = isleaf;
 #endif
+
+#ifdef NODE_HAS_LOCK
+	INIT_LOCK(&node->lock);
+#endif
+
+#ifdef NODE_HAS_TREE_AND_SUCC_LOCKS
+	INIT_LOCK(&node->tree_lock);
+	INIT_LOCK(&node->succ_lock);
+#endif
+
 	return node;
 }
 

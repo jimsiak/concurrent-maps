@@ -9,6 +9,10 @@
 #include "../../../key/key.h"
 #include "../../../map.h"
 
+#define INIT_LOCK(lock) pthread_spin_init((lock), PTHREAD_PROCESS_SHARED)
+#define LOCK(lock)      pthread_spin_lock((lock))
+#define UNLOCK(lock)    pthread_spin_unlock((lock))
+
 #define NODE_HAS_PARENT
 #define NODE_HAS_LOCK
 #define NODE_HAS_VERSION
@@ -16,10 +20,6 @@
 
 #include "validate.h"
 #include "print.h"
-
-#define INIT_LOCK(lock) pthread_spin_init((lock), PTHREAD_PROCESS_SHARED)
-#define LOCK(lock)      pthread_spin_lock((lock))
-#define UNLOCK(lock)    pthread_spin_unlock((lock))
 
 //> node->version handling
 #define UNLINKED 0x1LL
@@ -44,20 +44,20 @@
 
 static __thread void *nalloc;
 
-avl_node_t *avl_node_new(map_key_t key, void *data, int height, long long version,
-                         avl_node_t *parent)
-{
-	avl_node_t *node;
-	node = nalloc_alloc_node(nalloc);
-	memset(node, 0, sizeof(*node));
-	KEY_COPY(node->key, key);
-	node->data = data;
-	node->height = height;
-	node->version = version;
-	node->parent = parent;
-	INIT_LOCK(&node->lock);
-	return node;
-}
+//avl_node_t *avl_node_new(map_key_t key, void *data, int height, long long version,
+//                         avl_node_t *parent)
+//{
+//	avl_node_t *node;
+//	node = nalloc_alloc_node(nalloc);
+//	memset(node, 0, sizeof(*node));
+//	KEY_COPY(node->key, key);
+//	node->data = data;
+//	node->height = height;
+//	node->version = version;
+//	node->parent = parent;
+//	INIT_LOCK(&node->lock);
+//	return node;
+//}
 
 #define SPIN_CNT 100
 void wait_until_not_changing(avl_node_t *n)
@@ -481,7 +481,10 @@ int attempt_insert(map_key_t key, void *data, avl_node_t *node, int dir,
 		return RETRY;
 	}
 
-	avl_node_t *new_node = avl_node_new(key, data, 1, 0, node);
+//	avl_node_t *new_node = avl_node_new(key, data, 1, 0, node);
+	avl_node_t *new_node = avl_node_new(key, data);
+	new_node->height = 1;
+	new_node->parent = node;
 	if (dir == LEFT) node->left  = new_node;
 	else             node->right = new_node;
 	UNLOCK(&node->lock);
@@ -704,7 +707,7 @@ void *map_new()
 	avl_t *avl;
 	printf("Size of tree node is %lu\n", sizeof(avl_node_t));
 	avl = avl_new();
-	avl->root = avl_node_new(MAX_KEY, 0, 0, 0, NULL);
+	avl->root = avl_node_new(MAX_KEY, 0);
 	return avl;
 }
 
