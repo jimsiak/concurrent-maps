@@ -71,27 +71,27 @@ void tdata_add(tdata_t *d1, tdata_t *d2, tdata_t *dst)
 #define MARK(n) ((n)->data = (void *)0xFFLLU)
 #define IS_MARKED(n) ((n)->data == (void *)0xFFLLU)
 
-static avl_node_t *search(avl_t *avl, int k)
+static avl_node_t *search(avl_t *avl, map_key_t k)
 {
 	avl_node_t *child;
 	avl_node_t *n = avl->root;
-	int curr_key;
+	map_key_t curr_key;
 
 	while (1) {
-		curr_key = n->key;
-		if (curr_key == k) return n;
-		child = (curr_key < k) ? n->right : n->left;
+		KEY_COPY(curr_key, n->key);
+		if (KEY_CMP(curr_key, k) == 0) return n;
+		child = (KEY_CMP(curr_key, k) < 0) ? n->right : n->left;
 		if (child == NULL) return n;
 		n = child;
 	}
 }
 
-static int _avl_lookup_helper(avl_t *avl, int k)
+static int _avl_lookup_helper(avl_t *avl, map_key_t k)
 {
 	avl_node_t *n = search(avl, k);
-	while (n->key > k && n->pred->key >= k) n = n->pred;
-	while (n->key < k && n->succ->key <= k) n = n->succ;
-	return (n->key == k && !IS_MARKED(n));
+	while (KEY_CMP(n->key, k) > 0 && KEY_CMP(n->pred->key, k) >= 0) n = n->pred;
+	while (KEY_CMP(n->key, k) < 0 && KEY_CMP(n->succ->key, k) <= 0) n = n->succ;
+	return (KEY_CMP(n->key, k) == 0 && !IS_MARKED(n));
 }
 
 /*****************************************************************************/
@@ -232,7 +232,7 @@ static avl_node_t *choose_parent(avl_node_t *p, avl_node_t *s,
 static void insert_to_tree(avl_t *avl, avl_node_t *p, avl_node_t *n, tdata_t *tdata)
 {
 	n->parent = p;
-	if (p->key < n->key) {
+	if (KEY_CMP(p->key, n->key) < 0) {
 		p->right = n;
 		p->rheight = 1;
 	} else {
@@ -242,19 +242,19 @@ static void insert_to_tree(avl_t *avl, avl_node_t *p, avl_node_t *n, tdata_t *td
 	rebalance(avl, lock_parent(p, NULL), p);
 }
 
-static int _avl_insert_helper(avl_t *avl, int k, void *v, tdata_t *tdata)
+static int _avl_insert_helper(avl_t *avl, map_key_t k, void *v, tdata_t *tdata)
 {
 	avl_node_t *node, *p, *s, *new, *parent;
 
 	while(1) {
 		node = search(avl, k);
-		p = (node->key >= k) ? node->pred : node;
+		p = (KEY_CMP(node->key, k) >= 0) ? node->pred : node;
 		LOCK(&p->succ_lock);
 		s = p->succ;
 
-		if (k > p->key && k <= s->key && !IS_MARKED(p)) {
+		if (KEY_CMP(k, p->key) > 0 && KEY_CMP(k, s->key) <= 0 && !IS_MARKED(p)) {
 			//> Key already in the tree
-			if (s->key == k) {
+			if (KEY_CMP(s->key, k) == 0) {
 				UNLOCK(&p->succ_lock);
 				return 0;
 			}
@@ -393,19 +393,19 @@ static void remove_from_tree(avl_t *avl, avl_node_t *n, int has_two_children,
 	}
 }
 
-static int _avl_delete_helper(avl_t *avl, int k, tdata_t *tdata)
+static int _avl_delete_helper(avl_t *avl, map_key_t k, tdata_t *tdata)
 {
 	avl_node_t *node, *p, *s, *s_succ;
 	int has_two_children;
 
 	while (1) {
 		node = search(avl, k);
-		p = (node->key >= k) ? node->pred : node;
+		p = (KEY_CMP(node->key, k) >= 0) ? node->pred : node;
 		LOCK(&p->succ_lock);
 		s = p->succ;
 
-		if (k > p->key && k <= s->key && !IS_MARKED(p)) {
-			if (s->key > k) {
+		if (KEY_CMP(k, p->key) > 0 && KEY_CMP(k, s->key) <= 0 && !IS_MARKED(p)) {
+			if (KEY_CMP(s->key, k) > 0) {
 				UNLOCK(&p->succ_lock);
 				return 0;
 			}
@@ -424,26 +424,26 @@ static int _avl_delete_helper(avl_t *avl, int k, tdata_t *tdata)
 	}
 }
 
-static int _avl_update_helper(avl_t *avl, int k, void *v, tdata_t *tdata)
+static int _avl_update_helper(avl_t *avl, map_key_t k, void *v, tdata_t *tdata)
 {
 	avl_node_t *node, *p, *s, *new, *parent, *s_succ;
 	int has_two_children, op_is_insert = -1;
 
 	while(1) {
 		node = search(avl, k);
-		p = (node->key >= k) ? node->pred : node;
+		p = (KEY_CMP(node->key, k) >= 0) ? node->pred : node;
 		LOCK(&p->succ_lock);
 		s = p->succ;
 
-		if (k > p->key && k <= s->key && !IS_MARKED(p)) {
+		if (KEY_CMP(k, p->key) > 0 && KEY_CMP(k, s->key) <= 0 && !IS_MARKED(p)) {
 			if (op_is_insert == -1) {
-				if (s->key == k) op_is_insert = 0;
-				else             op_is_insert = 1;
+				if (KEY_CMP(s->key, k) == 0) op_is_insert = 0;
+				else                         op_is_insert = 1;
 			}
 
 			if (op_is_insert) {
 				//> Key already in the tree
-				if (s->key == k) {
+				if (KEY_CMP(s->key, k) == 0) {
 					UNLOCK(&p->succ_lock);
 					return 0;
 				}
@@ -460,7 +460,7 @@ static int _avl_update_helper(avl_t *avl, int k, void *v, tdata_t *tdata)
 				insert_to_tree(avl, parent, new, tdata);
 				return 1;
 			} else {
-				if (s->key > k) {
+				if (KEY_CMP(s->key, k) > 0) {
 					UNLOCK(&p->succ_lock);
 					return 2;
 				}
@@ -518,34 +518,34 @@ void map_tdata_add(void *d1, void *d2, void *dst)
 	tdata_add(d1, d2, dst);
 }
 
-int map_lookup(void *avl, void *thread_data, int key)
+int map_lookup(void *avl, void *thread_data, map_key_t key)
 {
 	int ret;
 	ret = _avl_lookup_helper(avl, key);
 	return ret;
 }
 
-int map_rquery(void *map, void *tdata, int key1, int key2)
+int map_rquery(void *map, void *tdata, map_key_t key1, map_key_t key2)
 {
 	printf("Range query not yet implemented\n");
 	return 0;
 }
 
-int map_insert(void *avl, void *thread_data, int key, void *data)
+int map_insert(void *avl, void *thread_data, map_key_t key, void *data)
 {
 	int ret = 0;
 	ret = _avl_insert_helper(avl, key, data, thread_data);
 	return ret;
 }
 
-int map_delete(void *avl, void *thread_data, int key)
+int map_delete(void *avl, void *thread_data, map_key_t key)
 {
 	int ret = 0;
 	ret = _avl_delete_helper(avl, key, thread_data);
 	return ret;
 }
 
-int map_update(void *avl, void *thread_data, int key, void *data)
+int map_update(void *avl, void *thread_data, map_key_t key, void *data)
 {
 	int ret = 0;
 	ret = _avl_update_helper(avl, key, data, thread_data);
