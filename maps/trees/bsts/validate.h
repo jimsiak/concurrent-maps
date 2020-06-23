@@ -64,8 +64,9 @@ static int bst_validate(bst_t *bst)
 	bst_violations = 0;
 
 #	ifdef BST_ELLEN
-	printf("SKATA\n");
 	_bst_validate_rec(bst->root->right->right, 0);
+#	elif defined(BST_NATARAJAN)
+	_bst_validate_rec(bst->root->right->right->right, 0);
 #	else
 	_bst_validate_rec(bst->root, 0);
 #	endif

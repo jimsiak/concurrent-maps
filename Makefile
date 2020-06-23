@@ -55,6 +55,8 @@ x.bst.int.rcu_htm: $(SOURCE_FILES) maps/trees/bsts/rcu-htm-internal.c
 	$(CC) $(CFLAGS) $^ -o $@
 x.bst.ext.ellen: $(SOURCE_FILES) maps/trees/bsts/ellen.c
 	$(CC) $(CFLAGS) $^ -o $@
+x.bst.ext.natarajan: $(SOURCE_FILES) maps/trees/bsts/natarajan.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 ### AVL BSTs
 x.bst.avl.bronson: $(SOURCE_FILES) maps/trees/bsts/avl/bronson.c

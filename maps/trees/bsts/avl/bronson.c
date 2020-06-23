@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <assert.h>
 
+#include "utils.h"
 #include "../../../key/key.h"
 #include "../../../map.h"
 

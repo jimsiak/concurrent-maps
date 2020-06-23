@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <pthread.h> /* pthread_spinlock_t ... */
 
+#include "utils.h"
 #include "../../../map.h"
 #include "../../../key/key.h"
 #include "arch.h" /* CACHE_LINE_SIZE */

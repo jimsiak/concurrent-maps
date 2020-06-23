@@ -7,9 +7,6 @@
 typedef bst_node_t avl_node_t;
 typedef bst_t avl_t;
 
-#define MAX(a,b) ( (a) >= (b) ? (a) : (b) )
-#define ABS(a) ( ((a) >= 0) ? (a) : -(a) )
-
 //> Used as `data` for marked nodes (zombie nodes)
 #define MARKED_NODE ((void *)0xffffLLU)
 
